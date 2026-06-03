@@ -1,0 +1,21 @@
+{{- if .Values.metrics.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}-metrics
+  labels:
+    app.kubernetes.io/name: {{ include "oci-cas-issuer.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  {{- with .Values.metrics.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "oci-cas-issuer.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.service.port }}
+      targetPort: metrics
+{{- end }}

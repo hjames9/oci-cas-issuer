@@ -1,0 +1,52 @@
+replicaCount: 1
+
+image:
+  repository: docker.io/hjames/oci-cas-issuer
+  tag: 0.1.11
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  # Add OKE Workload Identity annotations here when required by your cluster setup.
+  annotations: {}
+
+leaderElection: true
+# Namespace used to resolve Secret references for OCIClusterIssuer resources.
+# Defaults to the Helm release namespace when empty.
+clusterResourceNamespace: ""
+
+metrics:
+  service:
+    enabled: true
+    port: 8080
+    annotations: {}
+
+certManager:
+  approver:
+    enabled: true
+    serviceAccount:
+      name: cert-manager
+      namespace: cert-manager
+
+resources: {}
+
+podAnnotations: {}
+podLabels: {}
+extraEnv: []
+priorityClassName: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

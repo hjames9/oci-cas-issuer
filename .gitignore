@@ -1,0 +1,27 @@
+# Go
+bin/
+*.test
+*.out
+coverage.out
+
+# Build artifacts
+manager
+dist/
+build/
+
+# Helm
+*.tgz
+charts/**/charts/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

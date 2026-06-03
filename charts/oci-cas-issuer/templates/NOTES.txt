@@ -1,0 +1,3 @@
+oci-cas-issuer has been installed.
+
+Create an OCIIssuer or OCIClusterIssuer with group cas.oci-issuer.cert-manager.io.

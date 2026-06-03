@@ -1,0 +1,100 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}
+rules:
+  - apiGroups: ["cas.oci-issuer.cert-manager.io"]
+    resources: ["ociissuers", "ociclusterissuers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cas.oci-issuer.cert-manager.io"]
+    resources: ["ociissuers/status", "ociclusterissuers/status"]
+    verbs: ["patch", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests/status"]
+    verbs: ["patch", "update"]
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["certificatesigningrequests"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["certificatesigningrequests/status"]
+    verbs: ["patch", "update"]
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["signers"]
+    resourceNames:
+      - "ociclusterissuers.cas.oci-issuer.cert-manager.io/*"
+      - "ociissuers.cas.oci-issuer.cert-manager.io/*"
+    verbs: ["sign"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "oci-cas-issuer.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "oci-cas-issuer.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if .Values.certManager.approver.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}-cert-manager-approver
+rules:
+  - apiGroups: ["cert-manager.io"]
+    resources: ["signers"]
+    resourceNames:
+      - "ociclusterissuers.cas.oci-issuer.cert-manager.io/*"
+      - "ociissuers.cas.oci-issuer.cert-manager.io/*"
+    verbs: ["approve"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}-cert-manager-approver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "oci-cas-issuer.fullname" . }}-cert-manager-approver
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.certManager.approver.serviceAccount.name }}
+    namespace: {{ .Values.certManager.approver.serviceAccount.namespace }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}-leader-election
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "oci-cas-issuer.fullname" . }}-leader-election
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "oci-cas-issuer.fullname" . }}-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "oci-cas-issuer.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}

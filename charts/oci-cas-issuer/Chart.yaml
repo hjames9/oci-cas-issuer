@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oci-cas-issuer
+description: cert-manager external issuer for OCI private Certificate Authorities
+type: application
+version: 0.1.12
+appVersion: 0.1.12

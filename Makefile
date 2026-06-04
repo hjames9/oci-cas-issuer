@@ -14,7 +14,7 @@ GOLANGCI_LINT_VERSION ?= v1.64.8
 GEN_GOCACHE ?= /tmp/oci-cas-issuer-controller-gen-cache
 LINT_GOCACHE ?= /tmp/oci-cas-issuer-lint-go-cache
 
-.PHONY: build test coverage lint manifests generate docker-build docker-push helm-lint helm-package helm-push
+.PHONY: build test coverage lint manifests generate docker-build docker-push helm-lint helm-package helm-push require-release-version release-prepare release-check release-commit release-tag release
 
 build:
 	go build -buildvcs=false ./cmd/manager
@@ -56,3 +56,28 @@ helm-package:
 helm-push: helm-package
 	@test -n "$(HELM_CHART_REPOSITORY)" || (echo "Set HELM_CHART_REPOSITORY=oci://registry/namespace/path" >&2; exit 1)
 	helm push $(CHART_PACKAGE) $(HELM_CHART_REPOSITORY)
+
+require-release-version:
+	@test -n "$(VERSION)" || (echo "Set VERSION, for example: make release VERSION=0.1.16" >&2; exit 1)
+	@printf '%s\n' "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$$' || (echo "VERSION must be semver without a leading v, got $(VERSION)" >&2; exit 1)
+
+release-prepare: require-release-version
+	printf '%s\n' "$(VERSION)" > VERSION
+	sed -i 's/^version: .*/version: $(VERSION)/' $(CHART)/Chart.yaml
+	sed -i 's/^appVersion: .*/appVersion: $(VERSION)/' $(CHART)/Chart.yaml
+	sed -i 's/^  tag: .*/  tag: $(VERSION)-controller/' $(CHART)/values.yaml
+
+release-check: require-release-version
+	$(MAKE) test helm-lint helm-package VERSION=$(VERSION) CHART_VERSION=$(VERSION)
+
+release-commit: require-release-version
+	git add VERSION $(CHART)/Chart.yaml $(CHART)/values.yaml
+	git commit -m "chore: release $(VERSION)"
+
+release-tag: require-release-version
+	@test "$$(git branch --show-current)" = "main" || (echo "Release tags must be pushed from main" >&2; exit 1)
+	git tag v$(VERSION)
+	git push origin main
+	git push origin v$(VERSION)
+
+release: release-prepare release-check release-commit release-tag

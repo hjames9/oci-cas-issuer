@@ -1,6 +1,9 @@
-IMG ?= oci-cas-issuer:dev
+VERSION ?= $(shell cat VERSION)
+IMAGE_REPOSITORY ?= docker.io/hjames/oci-cas-issuer
+IMAGE_TAG ?= $(VERSION)-controller
+IMG ?= $(IMAGE_REPOSITORY):$(IMAGE_TAG)
 CHART := charts/oci-cas-issuer
-CHART_VERSION ?= $(shell cat VERSION)
+CHART_VERSION ?= $(VERSION)
 CHART_PACKAGE_DIR ?= dist/charts
 CHART_PACKAGE := $(CHART_PACKAGE_DIR)/oci-cas-issuer-$(CHART_VERSION).tgz
 HELM_CHART_REPOSITORY ?=

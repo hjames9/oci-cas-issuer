@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: docker.io/hjames/oci-cas-issuer
-  tag: 0.1.14-controller
+  repository: ghcr.io/hjames9/oci-cas-issuer
+  tag: 0.1.15-controller
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

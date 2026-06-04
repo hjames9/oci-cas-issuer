@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -39,11 +40,15 @@ func main() {
 	var probeAddr string
 	var leaderElect bool
 	var clusterResourceNamespace string
+	var ociCertificateDeleteAfter time.Duration
+	var garbageCollectorInterval time.Duration
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Enable leader election.")
 	flag.StringVar(&clusterResourceNamespace, "cluster-resource-namespace", "", "Namespace for cluster-scoped issuer referenced Secrets.")
+	flag.DurationVar(&ociCertificateDeleteAfter, "oci-certificate-delete-after", controller.DefaultDeleteWait, "Delay before OCI Certificate resources created by this controller are deleted.")
+	flag.DurationVar(&garbageCollectorInterval, "garbage-collector-interval", controller.DefaultGarbageCollectorInterval, "Interval for scanning issuer compartments and scheduling deletion of tagged OCI Certificate resources. Set to 0 to disable.")
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -73,7 +78,11 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	if err := (controller.Issuer{ClusterResourceNamespace: clusterResourceNamespace}).SetupWithManager(ctx, mgr); err != nil {
+	if err := (controller.Issuer{
+		ClusterResourceNamespace: clusterResourceNamespace,
+		CleanupPolicy:            controller.CleanupPolicy{DeleteAfter: ociCertificateDeleteAfter},
+		GarbageCollectorInterval: garbageCollectorInterval,
+	}).SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to setup issuer controller")
 		os.Exit(1)
 	}

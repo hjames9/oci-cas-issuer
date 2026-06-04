@@ -32,6 +32,18 @@ func (i Issuer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 			ClusterResourceNamespace: i.ClusterResourceNamespace,
 		}}
 	}
+	if i.GarbageCollectorInterval < 0 {
+		i.GarbageCollectorInterval = 0
+	}
+	if err := mgr.Add(GarbageCollectorRunner{
+		Client:                   mgr.GetClient(),
+		ClientFactory:            i.ClientFactory,
+		ClusterResourceNamespace: i.ClusterResourceNamespace,
+		CleanupPolicy:            cleanupPolicy(i.CleanupPolicy),
+		Interval:                 i.GarbageCollectorInterval,
+	}); err != nil {
+		return err
+	}
 	return (&issuercontrollers.CombinedController{
 		IssuerTypes:        []issuerapi.Issuer{&casv1alpha1.OCIIssuer{}},
 		ClusterIssuerTypes: []issuerapi.Issuer{&casv1alpha1.OCIClusterIssuer{}},

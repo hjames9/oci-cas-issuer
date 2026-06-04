@@ -9,6 +9,7 @@ CONTROLLER_GEN_VERSION ?= v0.16.5
 GOLANGCI_LINT ?= ./bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.64.8
 GEN_GOCACHE ?= /tmp/oci-cas-issuer-controller-gen-cache
+LINT_GOCACHE ?= /tmp/oci-cas-issuer-lint-go-cache
 
 .PHONY: build test coverage lint manifests generate docker-build docker-push helm-lint helm-package helm-push
 
@@ -22,7 +23,7 @@ coverage:
 	./hack/coverage.sh
 
 lint: $(GOLANGCI_LINT)
-	$(GOLANGCI_LINT) run
+	GOCACHE=$(LINT_GOCACHE) $(GOLANGCI_LINT) run
 
 $(GOLANGCI_LINT):
 	GOBIN=$(CURDIR)/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -37,10 +38,10 @@ generate: $(CONTROLLER_GEN)
 	GOCACHE=$(GEN_GOCACHE) $(CONTROLLER_GEN) object paths="./api/..."
 
 docker-build:
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(IMG) .
+	docker buildx build --provenance=false --platform linux/amd64,linux/arm64 -t $(IMG) .
 
 docker-push:
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(IMG) --push .
+	docker buildx build --provenance=false --platform linux/amd64,linux/arm64 -t $(IMG) --push .
 
 helm-lint:
 	helm lint $(CHART)

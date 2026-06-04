@@ -124,6 +124,9 @@ func apiKeyProvider(data map[string][]byte, fallbackRegion string) (common.Confi
 		region = fallbackRegion
 	}
 	passphrase := string(data["passphrase"])
+	if _, err := common.PrivateKeyFromBytesWithPassword([]byte(values["privateKey"]), []byte(passphrase)); err != nil {
+		return nil, fmt.Errorf("parse api key private key: %w", err)
+	}
 	return common.NewRawConfigurationProvider(values["tenancy"], values["user"], region, values["fingerprint"], values["privateKey"], &passphrase), nil
 }
 

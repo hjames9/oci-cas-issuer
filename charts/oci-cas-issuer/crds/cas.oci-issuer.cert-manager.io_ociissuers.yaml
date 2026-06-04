@@ -55,6 +55,7 @@ spec:
                       privateKey, and optionally passphrase.
                     properties:
                       name:
+                        minLength: 1
                         type: string
                     required:
                     - name
@@ -69,12 +70,15 @@ spec:
                 type: object
               certificateAuthorityId:
                 minLength: 1
+                pattern: ^ocid1\.certificateauthority\.
                 type: string
               compartmentId:
                 minLength: 1
+                pattern: ^ocid1\.(compartment|tenancy)\.
                 type: string
               region:
                 minLength: 1
+                pattern: ^[a-z]+-[a-z]+-[0-9]+$
                 type: string
             required:
             - certificateAuthorityId
@@ -147,6 +151,12 @@ spec:
                 x-kubernetes-list-type: map
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: apiKeySecretRef is only valid when auth.type is apiKey
+          rule: '!has(self.spec.auth) || self.spec.auth.type == ''apiKey'' || !has(self.spec.auth.apiKeySecretRef)'
+        - message: apiKey auth requires apiKeySecretRef.name
+          rule: '!has(self.spec.auth) || self.spec.auth.type != ''apiKey'' || has(self.spec.auth.apiKeySecretRef)
+            && size(self.spec.auth.apiKeySecretRef.name) > 0'
     served: true
     storage: true
     subresources:

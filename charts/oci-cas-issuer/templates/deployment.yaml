@@ -43,6 +43,9 @@ spec:
             - --leader-elect
             {{- end }}
             - --cluster-resource-namespace={{ default .Release.Namespace .Values.clusterResourceNamespace }}
+            - --oci-certificate-delete-after={{ default "48h" .Values.ociCertificateDeleteAfter }}
+            {{- $gc := default dict .Values.garbageCollector }}
+            - --garbage-collector-interval={{ ternary (default "1h" $gc.interval) "0" (default true $gc.enabled) }}
           {{- with .Values.extraEnv }}
           env:
             {{- toYaml . | nindent 12 }}

@@ -145,18 +145,10 @@ spec:
       - Georgia
     streetAddresses:
       - 123 Main St
-    postalCodes:
-      - "30301"
     serialNumber: app-001
   dnsNames:
     - app.example.com
     - www.app.example.com
-  ipAddresses:
-    - 10.0.0.10
-  uris:
-    - spiffe://example.com/app
-  emailAddresses:
-    - admin@example.com
   issuerRef:
     group: cas.oci-issuer.cert-manager.io
     kind: OCIIssuer
@@ -170,6 +162,14 @@ For external ClusterIssuers, the `cert-manager.io/cluster-issuer` Ingress annota
 The Helm chart grants cert-manager's built-in approver permission to approve `CertificateRequest` resources for `ociissuers.cas.oci-issuer.cert-manager.io/*` and `ociclusterissuers.cas.oci-issuer.cert-manager.io/*`. If cert-manager runs with a non-default ServiceAccount, set `certManager.approver.serviceAccount` in chart values.
 
 OCI's external CSR signing path currently rejects CSRs with an empty subject common name. Set `spec.commonName` on `Certificate` resources as well as the appropriate SAN fields.
+
+## Validation
+
+Issuer specs are validated by the CRDs and again at runtime. The controller rejects invalid OCI Certificate Authority OCIDs, invalid compartment or tenancy OCIDs, invalid region shape, unsupported auth types, and invalid `apiKeySecretRef` combinations.
+
+Before calling OCI, the signer validates that the request is an approved cert-manager `CertificateRequest` handled by issuer-lib, contains a PEM-encoded PKCS#10 CSR with a valid signature, has a non-empty common name, requests a duration from 1 hour through 397 days, uses DNS SANs only, and is not a CA certificate request.
+
+After OCI returns a bundle, the signer validates the issued certificate before writing status. It verifies the leaf public key, subject fields preserved by OCI, DNS SANs, validity window, CA bit, requested key usages, extended key usages, and the returned certificate chain when OCI includes chain material. OCI lowercases country values and may omit postal code from the issued subject, so those normalizations are accepted. If OCI CA rules clamp the requested validity period, the request currently fails instead of accepting a shorter certificate.
 
 ## Auth
 
@@ -213,5 +213,7 @@ For API key auth, replace `dynamic-group` with `group` and grant the group conta
 ## OCI Resource Cleanup
 
 OCI creates a managed Certificate resource for each external CSR issuance. The controller names resources deterministically from the `CertificateRequest` UID and schedules deletion after the certificate bundle is retrieved.
+
+The Helm chart defaults `ociCertificateDeleteAfter` to `48h`. A leader-elected garbage collector also scans issuer compartments every hour by default and schedules deletion for active OCI Certificate resources tagged as managed by this controller. Set `garbageCollector.enabled: false` to disable that recovery scan.
 
 The issuer does not expose `certificateProfileType`; OCI's external CSR signing config does not support that field. Certificate profile behavior is controlled by the OCI CA and signing policy.

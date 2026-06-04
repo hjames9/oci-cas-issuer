@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: docker.io/hjames/oci-cas-issuer
-  tag: 0.1.11
+  tag: 0.1.13
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -17,6 +17,11 @@ leaderElection: true
 # Namespace used to resolve Secret references for OCIClusterIssuer resources.
 # Defaults to the Helm release namespace when empty.
 clusterResourceNamespace: ""
+
+ociCertificateDeleteAfter: 48h
+garbageCollector:
+  enabled: true
+  interval: 1h
 
 metrics:
   service:

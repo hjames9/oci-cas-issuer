@@ -14,6 +14,7 @@ const (
 )
 
 type SecretKeySelector struct {
+	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 }
 
@@ -30,12 +31,15 @@ type OCIAuth struct {
 
 type IssuerSpec struct {
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^ocid1\.certificateauthority\.`
 	CertificateAuthorityID string `json:"certificateAuthorityId"`
 
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^ocid1\.(compartment|tenancy)\.`
 	CompartmentID string `json:"compartmentId"`
 
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z]+-[a-z]+-[0-9]+$`
 	Region string `json:"region"`
 
 	// +optional
@@ -44,6 +48,8 @@ type IssuerSpec struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.auth) || self.spec.auth.type == 'apiKey' || !has(self.spec.auth.apiKeySecretRef)",message="apiKeySecretRef is only valid when auth.type is apiKey"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.auth) || self.spec.auth.type != 'apiKey' || has(self.spec.auth.apiKeySecretRef) && size(self.spec.auth.apiKeySecretRef.name) > 0",message="apiKey auth requires apiKeySecretRef.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].reason"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -75,6 +81,8 @@ type OCIIssuerList struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.auth) || self.spec.auth.type == 'apiKey' || !has(self.spec.auth.apiKeySecretRef)",message="apiKeySecretRef is only valid when auth.type is apiKey"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.auth) || self.spec.auth.type != 'apiKey' || has(self.spec.auth.apiKeySecretRef) && size(self.spec.auth.apiKeySecretRef.name) > 0",message="apiKey auth requires apiKeySecretRef.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].reason"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

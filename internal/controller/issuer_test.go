@@ -220,6 +220,12 @@ func TestSignIssuerAndFactoryErrors(t *testing.T) {
 	issuer = Issuer{ClientFactory: staticFactory{err: errors.New("factory")}}
 	_, err = issuer.Sign(context.Background(), requestObject(testCSR(t)), issuerObject())
 	require.ErrorAs(t, err, &issuerErr)
+
+	badIssuer := issuerObject()
+	badIssuer.Spec.Region = "bad"
+	issuer = Issuer{ClientFactory: staticFactory{client: ociissuer.NewFakeClient()}}
+	_, err = issuer.Sign(context.Background(), requestObject(testCSR(t)), badIssuer)
+	require.ErrorAs(t, err, &issuerErr)
 }
 
 func TestSignCertificateDetailsError(t *testing.T) {
@@ -301,6 +307,66 @@ func TestSignMapsBundleErrorsAndParseErrors(t *testing.T) {
 	require.ErrorAs(t, err, &permanent)
 }
 
+func TestSignRejectsIssuedCertificateMismatch(t *testing.T) {
+	caCert, caKey := testCA(t)
+	csrPEM := testCSR(t)
+	leafPEM := signCSRWithMutation(t, csrPEM, caCert, caKey, func(cert *x509.Certificate) {
+		cert.DNSNames = []string{"other.example.com"}
+	})
+
+	fake := ociissuer.NewFakeClient()
+	fake.Bundles["ocid1.certificate.oc1.test.oci-cas-request-uid"] = ociissuer.CertificateBundle{
+		CertificatePEM: string(leafPEM),
+		ChainPEM:       string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCert.Raw})),
+	}
+
+	issuer := Issuer{ClientFactory: staticFactory{client: fake}}
+	_, err := issuer.Sign(context.Background(), requestObject(csrPEM), issuerObject())
+	require.Error(t, err)
+	var permanent signer.PermanentError
+	require.ErrorAs(t, err, &permanent)
+}
+
+func TestSignRejectsBrokenReturnedChain(t *testing.T) {
+	caCert, caKey := testCA(t)
+	otherCA, _ := testCA(t)
+	csrPEM := testCSR(t)
+	leafPEM := signCSR(t, csrPEM, caCert, caKey)
+
+	fake := ociissuer.NewFakeClient()
+	fake.Bundles["ocid1.certificate.oc1.test.oci-cas-request-uid"] = ociissuer.CertificateBundle{
+		CertificatePEM: string(leafPEM),
+		ChainPEM:       string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: otherCA.Raw})),
+	}
+
+	issuer := Issuer{ClientFactory: staticFactory{client: fake}}
+	_, err := issuer.Sign(context.Background(), requestObject(csrPEM), issuerObject())
+	require.Error(t, err)
+	var permanent signer.PermanentError
+	require.ErrorAs(t, err, &permanent)
+}
+
+func TestSignRejectsReturnedBundleWithExtraUnrelatedCertificate(t *testing.T) {
+	caCert, caKey := testCA(t)
+	otherCA, _ := testCA(t)
+	csrPEM := testCSR(t)
+	leafPEM := signCSR(t, csrPEM, caCert, caKey)
+
+	fake := ociissuer.NewFakeClient()
+	fake.Bundles["ocid1.certificate.oc1.test.oci-cas-request-uid"] = ociissuer.CertificateBundle{
+		CertificatePEM: string(leafPEM),
+		ChainPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCert.Raw})) +
+			string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: otherCA.Raw})),
+	}
+
+	issuer := Issuer{ClientFactory: staticFactory{client: fake}}
+	_, err := issuer.Sign(context.Background(), requestObject(csrPEM), issuerObject())
+	require.Error(t, err)
+	var permanent signer.PermanentError
+	require.ErrorAs(t, err, &permanent)
+	require.ErrorContains(t, err, "parse OCI certificate bundle")
+}
+
 func TestSignReturnsBundleWhenCleanupFails(t *testing.T) {
 	caCert, caKey := testCA(t)
 	csrPEM := testCSR(t)
@@ -369,6 +435,11 @@ func TestCheckSuccessRetryableAndFactoryError(t *testing.T) {
 	require.ErrorAs(t, err, &permanent)
 
 	err = issuer.Check(context.Background(), &bareIssuer{})
+	require.ErrorAs(t, err, &permanent)
+
+	badIssuer := issuerObject()
+	badIssuer.Spec.Region = "bad"
+	err = issuer.Check(context.Background(), badIssuer)
 	require.ErrorAs(t, err, &permanent)
 }
 
@@ -517,6 +588,10 @@ func testCSR(t *testing.T) []byte {
 }
 
 func signCSR(t *testing.T, csrPEM []byte, ca *x509.Certificate, caKey crypto.Signer) []byte {
+	return signCSRWithMutation(t, csrPEM, ca, caKey, func(*x509.Certificate) {})
+}
+
+func signCSRWithMutation(t *testing.T, csrPEM []byte, ca *x509.Certificate, caKey crypto.Signer, mutate func(*x509.Certificate)) []byte {
 	t.Helper()
 	block, _ := pem.Decode(csrPEM)
 	require.NotNil(t, block)
@@ -527,10 +602,11 @@ func signCSR(t *testing.T, csrPEM []byte, ca *x509.Certificate, caKey crypto.Sig
 		Subject:      csr.Subject,
 		DNSNames:     csr.DNSNames,
 		NotBefore:    time.Now().Add(-time.Minute),
-		NotAfter:     time.Now().Add(time.Hour),
+		NotAfter:     time.Now().Add(24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
+	mutate(tmpl)
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca, csr.PublicKey, caKey)
 	require.NoError(t, err)
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,6 +39,7 @@ type Issuer struct {
 	ClientFactory            ClientFactory
 	ClusterResourceNamespace string
 	CleanupPolicy            CleanupPolicy
+	GarbageCollectorInterval time.Duration
 
 	client client.Client
 }
@@ -71,6 +71,9 @@ func (i Issuer) Check(ctx context.Context, issuerObject issuerapi.Issuer) error 
 	if err != nil {
 		return err
 	}
+	if err := validateIssuerSpec(spec); err != nil {
+		return signer.PermanentError{Err: err}
+	}
 	ociClient, err := i.ClientFactory.ForIssuer(ctx, namespace, spec)
 	if err != nil {
 		return signer.PermanentError{Err: err}
@@ -89,6 +92,9 @@ func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, is
 	if err != nil {
 		return signer.PEMBundle{}, signer.IssuerError{Err: err}
 	}
+	if err := validateIssuerSpec(spec); err != nil {
+		return signer.PEMBundle{}, signer.IssuerError{Err: err}
+	}
 	ociClient, err := i.ClientFactory.ForIssuer(ctx, namespace, spec)
 	if err != nil {
 		return signer.PEMBundle{}, signer.IssuerError{Err: err}
@@ -97,10 +103,12 @@ func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, is
 	if err != nil {
 		return signer.PEMBundle{}, signer.PermanentError{Err: err}
 	}
-	if block, _ := pem.Decode(details.CSR); block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return signer.PEMBundle{}, signer.PermanentError{Err: fmt.Errorf("request is not a PEM encoded CSR")}
+	validated, err := validateCertificateRequest(details)
+	if err != nil {
+		return signer.PEMBundle{}, signer.PermanentError{Err: err}
 	}
 
+	requestStart := time.Now().UTC()
 	name := certificateName(cr.GetUID())
 	tags := requestTags(cr)
 	resource, err := ociClient.CreateCertificate(ctx, ociissuer.IssueRequest{
@@ -145,6 +153,13 @@ func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, is
 		return signer.PEMBundle{}, classifySignError(err)
 	}
 	chainPEM := []byte(strings.TrimSpace(bundle.CertificatePEM) + "\n" + strings.TrimSpace(bundle.ChainPEM) + "\n")
+	certs, err := decodeCertificateChainPEM(chainPEM)
+	if err != nil {
+		return signer.PEMBundle{}, signer.PermanentError{Err: err}
+	}
+	if err := validateIssuedCertificate(validated.CSR, details, certs, requestStart); err != nil {
+		return signer.PEMBundle{}, signer.PermanentError{Err: err}
+	}
 	parsed, err := pki.ParseSingleCertificateChainPEM(chainPEM)
 	if err != nil {
 		return signer.PEMBundle{}, signer.PermanentError{Err: fmt.Errorf("parse OCI certificate bundle: %w", err)}

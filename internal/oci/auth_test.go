@@ -2,6 +2,10 @@ package oci
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"os"
 	"testing"
@@ -24,11 +28,12 @@ func TestAPIKeyProviderRequiresSecretFields(t *testing.T) {
 }
 
 func TestAPIKeyProviderBuildsProvider(t *testing.T) {
+	privateKey := testPrivateKeyPEM(t)
 	provider, err := apiKeyProvider(map[string][]byte{
 		"tenancy":     []byte("ocid1.tenancy.oc1..aaaa"),
 		"user":        []byte("ocid1.user.oc1..aaaa"),
 		"fingerprint": []byte("aa:bb:cc"),
-		"privateKey":  []byte("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----"),
+		"privateKey":  []byte(privateKey),
 	}, "us-ashburn-1")
 	require.NoError(t, err)
 	region, err := provider.Region()
@@ -37,6 +42,7 @@ func TestAPIKeyProviderBuildsProvider(t *testing.T) {
 }
 
 func TestAPIKeyProviderBuildsProviderFromOCIConfigSecret(t *testing.T) {
+	privateKey := testPrivateKeyPEM(t)
 	provider, err := apiKeyProvider(map[string][]byte{
 		"config": []byte(`[DEFAULT]
 user=ocid1.user.oc1..aaaa
@@ -45,7 +51,7 @@ tenancy=ocid1.tenancy.oc1..aaaa
 region=us-phoenix-1
 key_file=/etc/oci/key.pem
 `),
-		"key.pem": []byte("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\nOCI_API_KEY"),
+		"key.pem": []byte(privateKey + "\nOCI_API_KEY"),
 	}, "us-ashburn-1")
 	require.NoError(t, err)
 	region, err := provider.Region()
@@ -54,13 +60,14 @@ key_file=/etc/oci/key.pem
 }
 
 func TestAPIKeyProviderConfigSecretFallsBackToIssuerRegion(t *testing.T) {
+	privateKey := testPrivateKeyPEM(t)
 	provider, err := apiKeyProvider(map[string][]byte{
 		"config": []byte(`[DEFAULT]
 user=ocid1.user.oc1..aaaa
 fingerprint=aa:bb:cc
 tenancy=ocid1.tenancy.oc1..aaaa
 `),
-		"key.pem": []byte("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----"),
+		"key.pem": []byte(privateKey),
 	}, "us-ashburn-1")
 	require.NoError(t, err)
 	region, err := provider.Region()
@@ -89,6 +96,7 @@ func TestNormalizePEMWithMalformedEndMarker(t *testing.T) {
 }
 
 func TestConfigProviderFactoryAPIKey(t *testing.T) {
+	privateKey := testPrivateKeyPEM(t)
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	secret := &corev1.Secret{
@@ -97,7 +105,7 @@ func TestConfigProviderFactoryAPIKey(t *testing.T) {
 			"tenancy":     []byte("ocid1.tenancy.oc1..aaaa"),
 			"user":        []byte("ocid1.user.oc1..aaaa"),
 			"fingerprint": []byte("aa:bb:cc"),
-			"privateKey":  []byte("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----"),
+			"privateKey":  []byte(privateKey),
 			"region":      []byte("us-phoenix-1"),
 		},
 	}
@@ -114,6 +122,16 @@ func TestConfigProviderFactoryAPIKey(t *testing.T) {
 	region, err := provider.Region()
 	require.NoError(t, err)
 	require.Equal(t, "us-phoenix-1", region)
+}
+
+func TestAPIKeyProviderRejectsInvalidPrivateKey(t *testing.T) {
+	_, err := apiKeyProvider(map[string][]byte{
+		"tenancy":     []byte("ocid1.tenancy.oc1..aaaa"),
+		"user":        []byte("ocid1.user.oc1..aaaa"),
+		"fingerprint": []byte("aa:bb:cc"),
+		"privateKey":  []byte("not-pem"),
+	}, "us-ashburn-1")
+	require.ErrorContains(t, err, "parse api key private key")
 }
 
 func TestConfigProviderFactoryErrors(t *testing.T) {
@@ -180,6 +198,16 @@ func TestConfigProviderFactoryPrincipalErrors(t *testing.T) {
 		Auth: casv1alpha1.OCIAuth{Type: casv1alpha1.AuthTypeInstancePrincipal},
 	})
 	require.ErrorContains(t, err, "instance")
+}
+
+func testPrivateKeyPEM(t *testing.T) string {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	}))
 }
 
 func TestConfigProviderFactoryDefaultPrincipalBuilders(t *testing.T) {

@@ -21,7 +21,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           image_repository="ghcr.io/${GITHUB_REPOSITORY,,}"
           dockerhub_image_repository="docker.io/hjames/oci-cas-issuer"
-          chart_repository="oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
+          chart_repository="oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           dockerhub_chart_repository="oci://registry-1.docker.io/hjames"
 
           echo "version=${version}" >> "${GITHUB_OUTPUT}"

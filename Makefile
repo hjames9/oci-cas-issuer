@@ -14,7 +14,7 @@ GOLANGCI_LINT_VERSION ?= v1.64.8
 GEN_GOCACHE ?= /tmp/oci-cas-issuer-controller-gen-cache
 LINT_GOCACHE ?= /tmp/oci-cas-issuer-lint-go-cache
 
-.PHONY: build test coverage lint manifests generate docker-build docker-push helm-lint helm-package helm-push require-release-version release-prepare release-check release-commit release-tag release
+.PHONY: build test coverage lint manifests generate docker-build docker-push helm-lint helm-package helm-push require-release-version release-prepare release-check release-commit release-tag release-watch release
 
 build:
 	go build -buildvcs=false ./cmd/manager
@@ -80,4 +80,15 @@ release-tag: require-release-version
 	git push origin main
 	git push origin v$(VERSION)
 
-release: release-prepare release-check release-commit release-tag
+release-watch: require-release-version
+	@echo "Waiting for GitHub Actions release workflow for v$(VERSION)..."
+	@run_id=""; \
+	for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
+		run_id=$$(gh run list --workflow release.yaml --branch v$(VERSION) --event push --limit 1 --json databaseId --jq '.[0].databaseId // ""'); \
+		if [ -n "$$run_id" ]; then break; fi; \
+		sleep 3; \
+	done; \
+	test -n "$$run_id" || (echo "Could not find release workflow run for v$(VERSION)" >&2; exit 1); \
+	gh run watch "$$run_id" --exit-status
+
+release: release-prepare release-check release-commit release-tag release-watch

@@ -10,21 +10,24 @@ import (
 type FakeClient struct {
 	mu sync.Mutex
 
-	CAError      error
-	CreateError  error
-	BundleError  error
-	DeleteError  error
-	Certificates map[string]CertificateResource
-	Bundles      map[string]CertificateBundle
-	Created      []IssueRequest
-	Deleted      []string
-	NextID       int
+	CAError       error
+	CreateError   error
+	BundleError   error
+	CABundleError error
+	DeleteError   error
+	Certificates  map[string]CertificateResource
+	Bundles       map[string]CertificateBundle
+	CABundles     map[string]CertificateBundle
+	Created       []IssueRequest
+	Deleted       []string
+	NextID        int
 }
 
 func NewFakeClient() *FakeClient {
 	return &FakeClient{
 		Certificates: map[string]CertificateResource{},
 		Bundles:      map[string]CertificateBundle{},
+		CABundles:    map[string]CertificateBundle{},
 		NextID:       1,
 	}
 }
@@ -93,6 +96,19 @@ func (f *FakeClient) GetCertificateBundle(_ context.Context, certificateID strin
 		return CertificateBundle{}, f.BundleError
 	}
 	bundle, ok := f.Bundles[certificateID]
+	if !ok {
+		return CertificateBundle{}, ErrNotFound
+	}
+	return bundle, nil
+}
+
+func (f *FakeClient) GetCertificateAuthorityBundle(_ context.Context, certificateAuthorityID string) (CertificateBundle, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.CABundleError != nil {
+		return CertificateBundle{}, f.CABundleError
+	}
+	bundle, ok := f.CABundles[certificateAuthorityID]
 	if !ok {
 		return CertificateBundle{}, ErrNotFound
 	}

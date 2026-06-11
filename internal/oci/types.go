@@ -50,6 +50,7 @@ type Client interface {
 	FindCertificateByName(ctx context.Context, compartmentID, name string) (CertificateResource, error)
 	ListManagedCertificates(ctx context.Context, compartmentID string) ([]CertificateResource, error)
 	GetCertificateBundle(ctx context.Context, certificateID string) (CertificateBundle, error)
+	GetCertificateAuthorityBundle(ctx context.Context, certificateAuthorityID string) (CertificateBundle, error)
 	ScheduleCertificateDeletion(ctx context.Context, certificateID string, deleteAt time.Time) error
 }
 

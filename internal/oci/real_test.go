@@ -185,6 +185,8 @@ func TestRealClientHTTPMethods(t *testing.T) {
 			return jsonResponse(http.StatusOK, `{"items":[`+certificateJSON("cert", "cert", "ACTIVE")+`]}`)
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/certificateBundles/cert"):
 			return jsonResponse(http.StatusOK, `{"certificateBundleType":"CERTIFICATE_CONTENT_PUBLIC_ONLY","certificateId":"cert","certificateName":"cert","versionNumber":1,"serialNumber":"01","timeCreated":"2026-06-03T12:00:00Z","validity":{"timeOfValidityNotBefore":"2026-06-03T12:00:00Z","timeOfValidityNotAfter":"2026-06-04T12:00:00Z"},"stages":["CURRENT"],"certificatePem":"leaf","certChainPem":"chain"}`)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/certificateAuthorityBundles/ca"):
+			return jsonResponse(http.StatusOK, `{"certificateAuthorityId":"ca","certificateAuthorityName":"ca","versionNumber":1,"serialNumber":"01","timeCreated":"2026-06-03T12:00:00Z","validity":{"timeOfValidityNotBefore":"2026-06-03T12:00:00Z","timeOfValidityNotAfter":"2026-06-04T12:00:00Z"},"stages":["CURRENT"],"certificatePem":"ca-leaf","certChainPem":"ca-chain"}`)
 		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/actions/scheduleDeletion"):
 			return jsonResponse(http.StatusOK, certificateJSON("cert", "cert", "PENDING_DELETION"))
 		default:
@@ -216,6 +218,10 @@ func TestRealClientHTTPMethods(t *testing.T) {
 	bundle, err := client.GetCertificateBundle(context.Background(), "cert")
 	require.NoError(t, err)
 	require.Equal(t, "leaf", bundle.CertificatePEM)
+	bundle, err = client.GetCertificateAuthorityBundle(context.Background(), "ca")
+	require.NoError(t, err)
+	require.Equal(t, "ca-leaf", bundle.CertificatePEM)
+	require.Equal(t, "ca-chain", bundle.ChainPEM)
 	require.NoError(t, client.ScheduleCertificateDeletion(context.Background(), "cert", time.Now()))
 	require.NotEmpty(t, dispatcher.seen)
 }

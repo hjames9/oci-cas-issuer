@@ -115,6 +115,20 @@ func (c *RealClient) GetCertificateBundle(ctx context.Context, certificateID str
 	}, nil
 }
 
+func (c *RealClient) GetCertificateAuthorityBundle(ctx context.Context, certificateAuthorityID string) (CertificateBundle, error) {
+	resp, err := c.retrieval.GetCertificateAuthorityBundle(ctx, certificates.GetCertificateAuthorityBundleRequest{
+		CertificateAuthorityId: common.String(certificateAuthorityID),
+		Stage:                  certificates.GetCertificateAuthorityBundleStageCurrent,
+	})
+	if err != nil {
+		return CertificateBundle{}, classify(err)
+	}
+	return CertificateBundle{
+		CertificatePEM: value(resp.CertificateAuthorityBundle.CertificatePem),
+		ChainPEM:       value(resp.CertificateAuthorityBundle.CertChainPem),
+	}, nil
+}
+
 func (c *RealClient) ScheduleCertificateDeletion(ctx context.Context, certificateID string, deleteAt time.Time) error {
 	_, err := c.management.ScheduleCertificateDeletion(ctx, certsmgmt.ScheduleCertificateDeletionRequest{
 		CertificateId: common.String(certificateID),

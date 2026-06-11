@@ -152,6 +152,13 @@ func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, is
 	if err != nil {
 		return signer.PEMBundle{}, classifySignError(err)
 	}
+	if strings.TrimSpace(bundle.ChainPEM) == "" {
+		caBundle, err := ociClient.GetCertificateAuthorityBundle(ctx, spec.CertificateAuthorityID)
+		if err != nil {
+			return signer.PEMBundle{}, classifySignError(err)
+		}
+		bundle.ChainPEM = combinePEM(caBundle.CertificatePEM, caBundle.ChainPEM)
+	}
 	chainPEM := []byte(strings.TrimSpace(bundle.CertificatePEM) + "\n" + strings.TrimSpace(bundle.ChainPEM) + "\n")
 	certs, err := decodeCertificateChainPEM(chainPEM)
 	if err != nil {
@@ -170,6 +177,19 @@ func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, is
 	}
 
 	return signer.PEMBundle(parsed), nil
+}
+
+func combinePEM(parts ...string) string {
+	var combined []string
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			combined = append(combined, trimmed)
+		}
+	}
+	if len(combined) == 0 {
+		return ""
+	}
+	return strings.Join(combined, "\n") + "\n"
 }
 
 func classifySignError(err error) error {

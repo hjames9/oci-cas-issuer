@@ -101,6 +101,44 @@ func TestSignCreatesOCICertificateAndReturnsBundle(t *testing.T) {
 	require.Equal(t, []string{"ocid1.certificate.oc1.test.oci-cas-request-uid"}, fake.Deleted)
 }
 
+func TestSignFallsBackToCertificateAuthorityBundleWhenCertificateChainMissing(t *testing.T) {
+	caCert, caKey := testCA(t)
+	csrPEM := testCSR(t)
+	leafPEM := signCSR(t, csrPEM, caCert, caKey)
+
+	fake := ociissuer.NewFakeClient()
+	fake.Bundles["ocid1.certificate.oc1.test.oci-cas-request-uid"] = ociissuer.CertificateBundle{
+		CertificatePEM: string(leafPEM),
+	}
+	fake.CABundles["ocid1.certificateauthority.oc1.test"] = ociissuer.CertificateBundle{
+		CertificatePEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCert.Raw})),
+	}
+
+	issuer := Issuer{ClientFactory: staticFactory{client: fake}}
+	bundle, err := issuer.Sign(context.Background(), requestObject(csrPEM), issuerObject())
+	require.NoError(t, err)
+	require.NotEmpty(t, bundle.ChainPEM)
+	require.NotEmpty(t, bundle.CAPEM)
+}
+
+func TestSignMapsCertificateAuthorityBundleError(t *testing.T) {
+	caCert, caKey := testCA(t)
+	csrPEM := testCSR(t)
+	leafPEM := signCSR(t, csrPEM, caCert, caKey)
+
+	fake := ociissuer.NewFakeClient()
+	fake.CABundleError = ociissuer.ErrRetryable
+	fake.Bundles["ocid1.certificate.oc1.test.oci-cas-request-uid"] = ociissuer.CertificateBundle{
+		CertificatePEM: string(leafPEM),
+	}
+
+	issuer := Issuer{ClientFactory: staticFactory{client: fake}}
+	_, err := issuer.Sign(context.Background(), requestObject(csrPEM), issuerObject())
+	require.Error(t, err)
+	var pending signer.PendingError
+	require.ErrorAs(t, err, &pending)
+}
+
 func TestSignReusesExistingCertificateOnConflict(t *testing.T) {
 	caCert, caKey := testCA(t)
 	csrPEM := testCSR(t)

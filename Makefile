@@ -58,7 +58,8 @@ helm-push: helm-package
 	helm push $(CHART_PACKAGE) $(HELM_CHART_REPOSITORY)
 
 require-release-version:
-	@test -n "$(VERSION)" || (echo "Set VERSION, for example: make release VERSION=0.1.16" >&2; exit 1)
+	@test "$(origin VERSION)" = "command line" -o "$(origin VERSION)" = "environment" -o "$(origin VERSION)" = "environment override" || (echo "Set VERSION explicitly, for example: make release VERSION=0.1.18" >&2; exit 1)
+	@test -n "$(VERSION)" || (echo "Set VERSION, for example: make release VERSION=0.1.18" >&2; exit 1)
 	@printf '%s\n' "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$$' || (echo "VERSION must be semver without a leading v, got $(VERSION)" >&2; exit 1)
 
 release-prepare: require-release-version

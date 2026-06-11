@@ -89,6 +89,7 @@ func TestCertificateRequestControllerSignsAgainstFakeOCI(t *testing.T) {
 	require.Equal(t, cmmeta.ConditionTrue, ready.Status)
 	require.Equal(t, cmapi.CertificateRequestReasonIssued, ready.Reason)
 	require.NotEmpty(t, got.Status.Certificate)
+	require.NotEmpty(t, got.Status.CA)
 	require.Len(t, fakeOCI.Created, 1)
 	require.Equal(t, []string{"ocid1.certificate.oc1.test." + certificateName(cr.UID)}, fakeOCI.Deleted)
 }
@@ -124,6 +125,7 @@ func TestCertificateRequestControllerRejectsOCIMismatchWithoutWritingCertificate
 func controllerCertificateRequestReconciler(t *testing.T, kubeClient client.Client, ociClient ociissuer.Client) *issuercontrollers.CertificateRequestReconciler {
 	t.Helper()
 	reconciler := (&issuercontrollers.CertificateRequestReconciler{
+		SetCAOnCertificateRequest: true,
 		RequestController: issuercontrollers.RequestController{
 			IssuerTypes: []issuerapi.Issuer{&casv1alpha1.OCIIssuer{
 				TypeMeta: metav1.TypeMeta{APIVersion: casv1alpha1.GroupVersion.String(), Kind: "OCIIssuer"},

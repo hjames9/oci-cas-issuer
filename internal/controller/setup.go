@@ -45,12 +45,13 @@ func (i Issuer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 		return err
 	}
 	return (&issuercontrollers.CombinedController{
-		IssuerTypes:        []issuerapi.Issuer{&casv1alpha1.OCIIssuer{}},
-		ClusterIssuerTypes: []issuerapi.Issuer{&casv1alpha1.OCIClusterIssuer{}},
-		FieldOwner:         FieldOwner,
-		MaxRetryDuration:   10 * time.Minute,
-		Sign:               i.Sign,
-		Check:              i.Check,
-		EventRecorder:      mgr.GetEventRecorderFor(FieldOwner),
+		IssuerTypes:               []issuerapi.Issuer{&casv1alpha1.OCIIssuer{}},
+		ClusterIssuerTypes:        []issuerapi.Issuer{&casv1alpha1.OCIClusterIssuer{}},
+		FieldOwner:                FieldOwner,
+		MaxRetryDuration:          10 * time.Minute,
+		Sign:                      i.Sign,
+		Check:                     i.Check,
+		EventRecorder:             mgr.GetEventRecorderFor(FieldOwner),
+		SetCAOnCertificateRequest: true,
 	}).SetupWithManager(ctx, mgr)
 }

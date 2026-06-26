@@ -43,17 +43,19 @@ func init() {
 }
 
 func main() {
-	options, err := parseOptions(os.Args[1:])
-	if err != nil {
-		setupLog.Error(err, "unable to parse flags")
-		os.Exit(1)
-	}
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&options.zapOptions)))
-
-	if err := run(options, defaultRuntime()); err != nil {
+	if err := runMain(os.Args[1:], defaultRuntime()); err != nil {
 		setupLog.Error(err, "manager exited")
 		os.Exit(1)
 	}
+}
+
+func runMain(args []string, runtime runtimeDependencies) error {
+	options, err := parseOptions(args)
+	if err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&options.zapOptions)))
+	return run(options, runtime)
 }
 
 type options struct {

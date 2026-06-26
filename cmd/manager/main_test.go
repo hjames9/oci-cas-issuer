@@ -47,6 +47,41 @@ func TestParseOptions(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRunMain(t *testing.T) {
+	manager := &fakeControllerManager{}
+	err := runMain([]string{
+		"--metrics-bind-address=:9090",
+		"--cluster-resource-namespace=cluster-secrets",
+	}, runtimeDependencies{
+		namespace: func() (string, error) {
+			t.Fatal("namespace should not be read when option is set")
+			return "", nil
+		},
+		context: context.Background,
+		newManager: func(options ctrl.Options) (controllerManager, error) {
+			require.Equal(t, ":9090", options.Metrics.BindAddress)
+			return manager, nil
+		},
+		setupIssuer: func(_ context.Context, _ controllerManager, issuer controller.Issuer) error {
+			require.Equal(t, "cluster-secrets", issuer.ClusterResourceNamespace)
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, manager.started)
+
+	_, runErr := parseOptions([]string{"--does-not-exist"})
+	require.Error(t, runErr)
+	err = runMain([]string{"--does-not-exist"}, successfulRuntimeWithManager(&fakeControllerManager{}, nil))
+	require.ErrorContains(t, err, "parse flags")
+
+	cause := errors.New("setup")
+	err = runMain([]string{"--cluster-resource-namespace=cluster-secrets"}, successfulRuntimeWithManager(&fakeControllerManager{}, func(context.Context, controllerManager, controller.Issuer) error {
+		return cause
+	}))
+	require.ErrorIs(t, err, cause)
+}
+
 func TestRunUsesOptionsAndStartsManager(t *testing.T) {
 	ctx := context.Background()
 	manager := &fakeControllerManager{}

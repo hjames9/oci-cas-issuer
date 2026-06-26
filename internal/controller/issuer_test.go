@@ -515,6 +515,8 @@ func TestHelpers(t *testing.T) {
 	require.Equal(t, DefaultCleanupPolicy(), cleanupPolicy(CleanupPolicy{}))
 	custom := CleanupPolicy{DeleteAfter: time.Minute}
 	require.Equal(t, custom, cleanupPolicy(custom))
+
+	require.Empty(t, combinePEM("", " \n\t "))
 }
 
 func TestScheduleDeletion(t *testing.T) {

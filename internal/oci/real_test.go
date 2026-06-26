@@ -257,6 +257,8 @@ func TestRealClientHTTPMethodErrors(t *testing.T) {
 	require.ErrorIs(t, err, ErrRetryable)
 	_, err = client.GetCertificateBundle(context.Background(), "cert")
 	require.ErrorIs(t, err, ErrRetryable)
+	_, err = client.GetCertificateAuthorityBundle(context.Background(), "ca")
+	require.ErrorIs(t, err, ErrRetryable)
 	require.ErrorIs(t, client.ScheduleCertificateDeletion(context.Background(), "cert", time.Now()), ErrRetryable)
 }
 

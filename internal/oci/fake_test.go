@@ -44,6 +44,11 @@ func TestFakeClientLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "leaf", bundle.CertificatePEM)
 
+	client.CABundles["ca"] = CertificateBundle{CertificatePEM: "ca-leaf", ChainPEM: "ca-chain"}
+	caBundle, err := client.GetCertificateAuthorityBundle(context.Background(), "ca")
+	require.NoError(t, err)
+	require.Equal(t, "ca-leaf", caBundle.CertificatePEM)
+
 	require.NoError(t, client.ScheduleCertificateDeletion(context.Background(), cert.ID, time.Now()))
 	require.Equal(t, []string{cert.ID}, client.Deleted)
 
@@ -73,6 +78,13 @@ func TestFakeClientErrors(t *testing.T) {
 	client.BundleError = ErrRetryable
 	_, err = client.GetCertificateBundle(context.Background(), "missing")
 	require.ErrorIs(t, err, ErrRetryable)
+
+	_, err = client.GetCertificateAuthorityBundle(context.Background(), "missing")
+	require.ErrorIs(t, err, ErrNotFound)
+
+	client.CABundleError = ErrUnauthorized
+	_, err = client.GetCertificateAuthorityBundle(context.Background(), "missing")
+	require.ErrorIs(t, err, ErrUnauthorized)
 
 	client.DeleteError = ErrConflict
 	require.ErrorIs(t, client.ScheduleCertificateDeletion(context.Background(), "cert", time.Now()), ErrConflict)

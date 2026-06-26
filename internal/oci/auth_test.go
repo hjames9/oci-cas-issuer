@@ -234,6 +234,41 @@ func TestConfigProviderFactoryDefaultPrincipalBuilders(t *testing.T) {
 	require.Equal(t, "region", region)
 }
 
+func TestDefaultPrincipalBuilders(t *testing.T) {
+	originalWorkloadIdentity := okeWorkloadIdentityConfigurationProvider
+	originalInstancePrincipal := instancePrincipalConfigurationProvider
+	t.Cleanup(func() {
+		okeWorkloadIdentityConfigurationProvider = originalWorkloadIdentity
+		instancePrincipalConfigurationProvider = originalInstancePrincipal
+	})
+
+	raw := claimAccessProvider{ConfigurationProvider: common.NewRawConfigurationProvider("tenancy", "user", "region", "fingerprint", "key", nil)}
+	okeWorkloadIdentityConfigurationProvider = func() (auth.ConfigurationProviderWithClaimAccess, error) {
+		require.Equal(t, auth.ResourcePrincipalVersion2_2, os.Getenv(auth.ResourcePrincipalVersionEnvVar))
+		require.Equal(t, "us-ashburn-1", os.Getenv(auth.ResourcePrincipalRegionEnvVar))
+		return raw, nil
+	}
+	instancePrincipalConfigurationProvider = func() (common.ConfigurationProvider, error) {
+		return raw, nil
+	}
+
+	provider, err := defaultWorkloadIdentityProvider("us-ashburn-1")
+	require.NoError(t, err)
+	require.Equal(t, raw, provider)
+
+	provider, err = defaultInstancePrincipalProvider()
+	require.NoError(t, err)
+	require.Equal(t, raw, provider)
+}
+
+type claimAccessProvider struct {
+	common.ConfigurationProvider
+}
+
+func (p claimAccessProvider) GetClaim(string) (interface{}, error) {
+	return nil, nil
+}
+
 func TestWithWorkloadIdentityEnvDefaultsMissingValues(t *testing.T) {
 	t.Setenv(auth.ResourcePrincipalVersionEnvVar, "")
 	t.Setenv(auth.ResourcePrincipalRegionEnvVar, "")

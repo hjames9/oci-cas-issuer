@@ -82,6 +82,25 @@ func TestRunMain(t *testing.T) {
 	require.ErrorIs(t, err, cause)
 }
 
+func TestMainFunctionInvalidFlag(t *testing.T) {
+	originalArgs := os.Args
+	originalExitProcess := exitProcess
+	t.Cleanup(func() {
+		os.Args = originalArgs
+		exitProcess = originalExitProcess
+	})
+
+	os.Args = []string{"oci-cas-issuer", "--does-not-exist"}
+	var exitCode *int
+	exitProcess = func(code int) {
+		exitCode = &code
+	}
+
+	main()
+	require.NotNil(t, exitCode)
+	require.Equal(t, 1, *exitCode)
+}
+
 func TestRunUsesOptionsAndStartsManager(t *testing.T) {
 	ctx := context.Background()
 	manager := &fakeControllerManager{}
@@ -241,6 +260,20 @@ func TestDefaultRuntime(t *testing.T) {
 	require.Panics(t, func() {
 		_ = runtime.setupIssuer(context.Background(), &fakeControllerManager{}, controller.Issuer{})
 	})
+}
+
+func TestDefaultNewCtrlManager(t *testing.T) {
+	manager, err := newCtrlManager(&rest.Config{
+		Host: "https://unit.test",
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: true,
+		},
+	}, ctrl.Options{
+		Scheme:  scheme,
+		Metrics: metricsserver.Options{BindAddress: "0"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, manager)
 }
 
 func TestInClusterNamespaceOutsideCluster(t *testing.T) {

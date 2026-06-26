@@ -36,6 +36,10 @@ func (i Issuer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 }
 
 var setupCombinedController = func(ctx context.Context, combined *issuercontrollers.CombinedController, mgr ctrl.Manager) error {
+	return combinedControllerSetupWithManager(ctx, combined, mgr)
+}
+
+var combinedControllerSetupWithManager = func(ctx context.Context, combined *issuercontrollers.CombinedController, mgr ctrl.Manager) error {
 	return combined.SetupWithManager(ctx, mgr)
 }
 

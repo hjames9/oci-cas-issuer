@@ -27,13 +27,16 @@ type ConfigProviderFactory struct {
 var (
 	workloadIdentityEnvMu sync.Mutex
 
+	okeWorkloadIdentityConfigurationProvider = auth.OkeWorkloadIdentityConfigurationProvider
+	instancePrincipalConfigurationProvider   = auth.InstancePrincipalConfigurationProvider
+
 	defaultWorkloadIdentityProvider = func(region string) (common.ConfigurationProvider, error) {
 		return withWorkloadIdentityEnv(region, func() (common.ConfigurationProvider, error) {
-			return auth.OkeWorkloadIdentityConfigurationProvider()
+			return okeWorkloadIdentityConfigurationProvider()
 		})
 	}
 	defaultInstancePrincipalProvider = func() (common.ConfigurationProvider, error) {
-		return auth.InstancePrincipalConfigurationProvider()
+		return instancePrincipalConfigurationProvider()
 	}
 )
 

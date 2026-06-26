@@ -30,6 +30,7 @@ const inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/na
 var (
 	scheme         = runtime.NewScheme()
 	setupLog       = ctrl.Log.WithName("setup")
+	exitProcess    = os.Exit
 	getConfigOrDie = ctrl.GetConfigOrDie
 	newCtrlManager = func(config *rest.Config, options ctrl.Options) (controllerManager, error) {
 		return ctrl.NewManager(config, options)
@@ -45,7 +46,7 @@ func init() {
 func main() {
 	if err := runMain(os.Args[1:], defaultRuntime()); err != nil {
 		setupLog.Error(err, "manager exited")
-		os.Exit(1)
+		exitProcess(1)
 	}
 }
 

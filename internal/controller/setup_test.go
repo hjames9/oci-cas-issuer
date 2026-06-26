@@ -121,6 +121,35 @@ func TestSetupWithManagerWrapperReturnsPrepareError(t *testing.T) {
 	require.ErrorIs(t, err, addErr)
 }
 
+func TestDefaultSetupCombinedController(t *testing.T) {
+	original := combinedControllerSetupWithManager
+	t.Cleanup(func() { combinedControllerSetupWithManager = original })
+
+	ctx := context.Background()
+	combined := &issuercontrollers.CombinedController{FieldOwner: FieldOwner}
+	mgr := &setupWithManagerTestManager{
+		setupTestManager: setupTestManager{
+			client:   fake.NewClientBuilder().Build(),
+			recorder: record.NewFakeRecorder(1),
+		},
+	}
+	combinedControllerSetupWithManager = func(gotCtx context.Context, gotCombined *issuercontrollers.CombinedController, gotManager ctrl.Manager) error {
+		require.Equal(t, ctx, gotCtx)
+		require.Same(t, combined, gotCombined)
+		require.Same(t, mgr, gotManager)
+		return errors.New("setup")
+	}
+
+	err := setupCombinedController(ctx, combined, mgr)
+	require.ErrorContains(t, err, "setup")
+}
+
+func TestDefaultCombinedControllerSetupWithManager(t *testing.T) {
+	require.Panics(t, func() {
+		_ = combinedControllerSetupWithManager(context.Background(), &issuercontrollers.CombinedController{}, &setupWithManagerTestManager{})
+	})
+}
+
 func TestRealClientFactoryReturnsConfigProviderError(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(scheme))

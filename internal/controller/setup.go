@@ -32,7 +32,11 @@ func (i Issuer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	return configured.combinedController(mgr.GetEventRecorderFor(FieldOwner)).SetupWithManager(ctx, mgr)
+	return setupCombinedController(ctx, configured.combinedController(mgr.GetEventRecorderFor(FieldOwner)), mgr)
+}
+
+var setupCombinedController = func(ctx context.Context, combined *issuercontrollers.CombinedController, mgr ctrl.Manager) error {
+	return combined.SetupWithManager(ctx, mgr)
 }
 
 type setupManager interface {

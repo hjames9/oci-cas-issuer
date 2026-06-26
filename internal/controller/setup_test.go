@@ -10,11 +10,13 @@ import (
 	"testing"
 	"time"
 
+	issuercontrollers "github.com/cert-manager/issuer-lib/controllers"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
@@ -66,6 +68,55 @@ func TestPrepareManagerReturnsAddError(t *testing.T) {
 		client:   fake.NewClientBuilder().Build(),
 		addErr:   addErr,
 		recorder: record.NewFakeRecorder(1),
+	})
+	require.ErrorIs(t, err, addErr)
+}
+
+func TestSetupWithManagerWrapper(t *testing.T) {
+	original := setupCombinedController
+	t.Cleanup(func() { setupCombinedController = original })
+
+	ctx := context.Background()
+	kubeClient := fake.NewClientBuilder().Build()
+	mgr := &setupWithManagerTestManager{
+		setupTestManager: setupTestManager{client: kubeClient, recorder: record.NewFakeRecorder(1)},
+	}
+
+	setupCombinedController = func(gotCtx context.Context, combined *issuercontrollers.CombinedController, gotManager ctrl.Manager) error {
+		require.Equal(t, ctx, gotCtx)
+		require.Same(t, mgr, gotManager)
+		require.Equal(t, FieldOwner, combined.FieldOwner)
+		require.True(t, combined.SetCAOnCertificateRequest)
+		return nil
+	}
+
+	err := (Issuer{ClientFactory: staticFactory{}}).SetupWithManager(ctx, mgr)
+	require.NoError(t, err)
+	require.Len(t, mgr.added, 1)
+
+	setupErr := errors.New("setup")
+	setupCombinedController = func(context.Context, *issuercontrollers.CombinedController, ctrl.Manager) error {
+		return setupErr
+	}
+	err = (Issuer{ClientFactory: staticFactory{}}).SetupWithManager(ctx, mgr)
+	require.ErrorIs(t, err, setupErr)
+}
+
+func TestSetupWithManagerWrapperReturnsPrepareError(t *testing.T) {
+	original := setupCombinedController
+	t.Cleanup(func() { setupCombinedController = original })
+	setupCombinedController = func(context.Context, *issuercontrollers.CombinedController, ctrl.Manager) error {
+		t.Fatal("combined controller setup should not run")
+		return nil
+	}
+
+	addErr := errors.New("add")
+	err := (Issuer{ClientFactory: staticFactory{}}).SetupWithManager(context.Background(), &setupWithManagerTestManager{
+		setupTestManager: setupTestManager{
+			client:   fake.NewClientBuilder().Build(),
+			addErr:   addErr,
+			recorder: record.NewFakeRecorder(1),
+		},
 	})
 	require.ErrorIs(t, err, addErr)
 }
@@ -126,4 +177,21 @@ func (m *setupTestManager) Add(runnable ctrlmanager.Runnable) error {
 
 func (m *setupTestManager) GetEventRecorderFor(string) record.EventRecorder {
 	return m.recorder
+}
+
+type setupWithManagerTestManager struct {
+	ctrl.Manager
+	setupTestManager
+}
+
+func (m *setupWithManagerTestManager) GetClient() client.Client {
+	return m.setupTestManager.GetClient()
+}
+
+func (m *setupWithManagerTestManager) Add(runnable ctrlmanager.Runnable) error {
+	return m.setupTestManager.Add(runnable)
+}
+
+func (m *setupWithManagerTestManager) GetEventRecorderFor(name string) record.EventRecorder {
+	return m.setupTestManager.GetEventRecorderFor(name)
 }

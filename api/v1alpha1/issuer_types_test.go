@@ -74,12 +74,16 @@ func TestDeepCopy(t *testing.T) {
 	require.Nil(t, nilAuth.DeepCopy())
 	var nilIssuer *OCIIssuer
 	require.Nil(t, nilIssuer.DeepCopy())
+	require.Nil(t, nilIssuer.DeepCopyObject())
 	var nilClusterIssuer *OCIClusterIssuer
 	require.Nil(t, nilClusterIssuer.DeepCopy())
+	require.Nil(t, nilClusterIssuer.DeepCopyObject())
 	var nilIssuerList *OCIIssuerList
 	require.Nil(t, nilIssuerList.DeepCopy())
+	require.Nil(t, nilIssuerList.DeepCopyObject())
 	var nilClusterIssuerList *OCIClusterIssuerList
 	require.Nil(t, nilClusterIssuerList.DeepCopy())
+	require.Nil(t, nilClusterIssuerList.DeepCopyObject())
 	var nilSelector *SecretKeySelector
 	require.Nil(t, nilSelector.DeepCopy())
 }

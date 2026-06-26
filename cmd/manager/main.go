@@ -104,7 +104,11 @@ func main() {
 var errNotInCluster = errors.New("not running in-cluster")
 
 func inClusterNamespace() (string, error) {
-	namespace, err := os.ReadFile(inClusterNamespacePath)
+	return namespaceFromFile(inClusterNamespacePath)
+}
+
+func namespaceFromFile(path string) (string, error) {
+	namespace, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", errNotInCluster
 	}

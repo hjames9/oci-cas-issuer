@@ -6,7 +6,10 @@ import (
 
 	issuerapi "github.com/cert-manager/issuer-lib/api/v1alpha1"
 	issuercontrollers "github.com/cert-manager/issuer-lib/controllers"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 
 	casv1alpha1 "github.com/oci-cert-manager/oci-cas-issuer/api/v1alpha1"
 	ociissuer "github.com/oci-cert-manager/oci-cas-issuer/internal/oci"
@@ -25,6 +28,20 @@ func (f RealClientFactory) ForIssuer(ctx context.Context, namespace string, spec
 }
 
 func (i Issuer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+	configured, err := i.prepareManager(mgr)
+	if err != nil {
+		return err
+	}
+	return configured.combinedController(mgr.GetEventRecorderFor(FieldOwner)).SetupWithManager(ctx, mgr)
+}
+
+type setupManager interface {
+	GetClient() client.Client
+	Add(ctrlmanager.Runnable) error
+	GetEventRecorderFor(name string) record.EventRecorder
+}
+
+func (i Issuer) prepareManager(mgr setupManager) (Issuer, error) {
 	i.client = mgr.GetClient()
 	if i.ClientFactory == nil {
 		i.ClientFactory = RealClientFactory{ConfigProviders: ociissuer.ConfigProviderFactory{
@@ -42,16 +59,20 @@ func (i Issuer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 		CleanupPolicy:            cleanupPolicy(i.CleanupPolicy),
 		Interval:                 i.GarbageCollectorInterval,
 	}); err != nil {
-		return err
+		return Issuer{}, err
 	}
-	return (&issuercontrollers.CombinedController{
+	return i, nil
+}
+
+func (i Issuer) combinedController(eventRecorder record.EventRecorder) *issuercontrollers.CombinedController {
+	return &issuercontrollers.CombinedController{
 		IssuerTypes:               []issuerapi.Issuer{&casv1alpha1.OCIIssuer{}},
 		ClusterIssuerTypes:        []issuerapi.Issuer{&casv1alpha1.OCIClusterIssuer{}},
 		FieldOwner:                FieldOwner,
 		MaxRetryDuration:          10 * time.Minute,
 		Sign:                      i.Sign,
 		Check:                     i.Check,
-		EventRecorder:             mgr.GetEventRecorderFor(FieldOwner),
+		EventRecorder:             eventRecorder,
 		SetCAOnCertificateRequest: true,
-	}).SetupWithManager(ctx, mgr)
+	}
 }

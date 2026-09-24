@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/hjames9/oci-cas-issuer
-  tag: 0.1.22-controller
+  tag: 0.1.23-controller
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

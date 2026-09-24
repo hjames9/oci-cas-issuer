@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	issuerapi "github.com/cert-manager/issuer-lib/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type AuthType string
@@ -111,6 +112,8 @@ type OCIClusterIssuerList struct {
 	Items           []OCIClusterIssuer `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&OCIIssuer{}, &OCIIssuerList{}, &OCIClusterIssuer{}, &OCIClusterIssuerList{})
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(GroupVersion, &OCIIssuer{}, &OCIIssuerList{}, &OCIClusterIssuer{}, &OCIClusterIssuerList{})
+	metav1.AddToGroupVersion(scheme, GroupVersion)
+	return nil
 }

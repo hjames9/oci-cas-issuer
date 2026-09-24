@@ -6,6 +6,7 @@ import (
 	issuerapi "github.com/cert-manager/issuer-lib/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestIssuerHelpers(t *testing.T) {
@@ -86,6 +87,28 @@ func TestDeepCopy(t *testing.T) {
 	require.Nil(t, nilClusterIssuerList.DeepCopyObject())
 	var nilSelector *SecretKeySelector
 	require.Nil(t, nilSelector.DeepCopy())
+}
+
+func TestAddToSchemeRegistersIssuerTypes(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, AddToScheme(scheme))
+
+	for _, tc := range []struct {
+		name string
+		obj  runtime.Object
+		kind string
+	}{
+		{name: "issuer", obj: &OCIIssuer{}, kind: "OCIIssuer"},
+		{name: "issuer list", obj: &OCIIssuerList{}, kind: "OCIIssuerList"},
+		{name: "cluster issuer", obj: &OCIClusterIssuer{}, kind: "OCIClusterIssuer"},
+		{name: "cluster issuer list", obj: &OCIClusterIssuerList{}, kind: "OCIClusterIssuerList"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kinds, _, err := scheme.ObjectKinds(tc.obj)
+			require.NoError(t, err)
+			require.Contains(t, kinds, GroupVersion.WithKind(tc.kind))
+		})
+	}
 }
 
 func statusWithReadyCondition() issuerapi.IssuerStatus {

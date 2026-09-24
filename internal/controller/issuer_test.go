@@ -76,7 +76,7 @@ func (f failingRequest) GetCertificateDetails() (signer.CertificateDetails, erro
 	return signer.CertificateDetails{}, errors.New("details")
 }
 
-func (f failingRequest) GetConditions() []cmapi.CertificateRequestCondition {
+func (f failingRequest) GetConditions() []metav1.Condition {
 	return nil
 }
 
@@ -560,7 +560,7 @@ func requestObject(csrPEM []byte) signer.CertificateRequestObject {
 		Spec: cmapi.CertificateRequestSpec{
 			Request:  csrPEM,
 			Duration: &metav1.Duration{Duration: 24 * time.Hour},
-			IssuerRef: cmmeta.ObjectReference{
+			IssuerRef: cmmeta.IssuerReference{
 				Group: casv1alpha1.GroupName,
 				Kind:  "OCIIssuer",
 				Name:  "issuer",

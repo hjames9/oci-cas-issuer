@@ -19,7 +19,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	clocktesting "k8s.io/utils/clock/testing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -134,7 +133,7 @@ func controllerCertificateRequestReconciler(t *testing.T, kubeClient client.Clie
 			MaxRetryDuration: time.Minute,
 			Client:           kubeClient,
 			Sign:             Issuer{ClientFactory: staticFactory{client: ociClient}}.Sign,
-			EventRecorder:    record.NewFakeRecorder(100),
+			EventRecorder:    fakeEventRecorder{},
 			Clock:            clocktesting.NewFakeClock(time.Unix(1000, 0)),
 		},
 	}).Init()
@@ -257,7 +256,7 @@ func controllerCertificateRequest(name string, csr []byte, approved bool) *cmapi
 		Spec: cmapi.CertificateRequestSpec{
 			Request:  csr,
 			Duration: &metav1.Duration{Duration: 24 * time.Hour},
-			IssuerRef: cmmeta.ObjectReference{
+			IssuerRef: cmmeta.IssuerReference{
 				Group: casv1alpha1.GroupName,
 				Kind:  "OCIIssuer",
 				Name:  "issuer",

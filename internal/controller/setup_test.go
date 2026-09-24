@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -26,12 +27,12 @@ import (
 )
 
 func TestCombinedControllerOptions(t *testing.T) {
-	recorder := record.NewFakeRecorder(1)
+	recorder := &fakeEventRecorder{}
 	controller := Issuer{}.combinedController(recorder)
 
 	require.Equal(t, FieldOwner, controller.FieldOwner)
 	require.Equal(t, 10*time.Minute, controller.MaxRetryDuration)
-	require.True(t, controller.SetCAOnCertificateRequest)
+	requireSetCAOnCertificateRequest(t, controller)
 	require.Same(t, recorder, controller.EventRecorder)
 	require.Len(t, controller.IssuerTypes, 1)
 	require.IsType(t, &casv1alpha1.OCIIssuer{}, controller.IssuerTypes[0])
@@ -43,7 +44,7 @@ func TestCombinedControllerOptions(t *testing.T) {
 
 func TestPrepareManagerDefaultsAndAddsGarbageCollector(t *testing.T) {
 	kubeClient := fake.NewClientBuilder().Build()
-	mgr := &setupTestManager{client: kubeClient, recorder: record.NewFakeRecorder(1)}
+	mgr := &setupTestManager{client: kubeClient, recorder: fakeEventRecorder{}}
 
 	configured, err := (Issuer{
 		ClusterResourceNamespace: "cluster-resources",
@@ -67,7 +68,7 @@ func TestPrepareManagerReturnsAddError(t *testing.T) {
 	_, err := (Issuer{ClientFactory: staticFactory{}}).prepareManager(&setupTestManager{
 		client:   fake.NewClientBuilder().Build(),
 		addErr:   addErr,
-		recorder: record.NewFakeRecorder(1),
+		recorder: fakeEventRecorder{},
 	})
 	require.ErrorIs(t, err, addErr)
 }
@@ -79,14 +80,14 @@ func TestSetupWithManagerWrapper(t *testing.T) {
 	ctx := context.Background()
 	kubeClient := fake.NewClientBuilder().Build()
 	mgr := &setupWithManagerTestManager{
-		setupTestManager: setupTestManager{client: kubeClient, recorder: record.NewFakeRecorder(1)},
+		setupTestManager: setupTestManager{client: kubeClient, recorder: fakeEventRecorder{}},
 	}
 
 	setupCombinedController = func(gotCtx context.Context, combined *issuercontrollers.CombinedController, gotManager ctrl.Manager) error {
 		require.Equal(t, ctx, gotCtx)
 		require.Same(t, mgr, gotManager)
 		require.Equal(t, FieldOwner, combined.FieldOwner)
-		require.True(t, combined.SetCAOnCertificateRequest)
+		requireSetCAOnCertificateRequest(t, combined)
 		return nil
 	}
 
@@ -115,7 +116,7 @@ func TestSetupWithManagerWrapperReturnsPrepareError(t *testing.T) {
 		setupTestManager: setupTestManager{
 			client:   fake.NewClientBuilder().Build(),
 			addErr:   addErr,
-			recorder: record.NewFakeRecorder(1),
+			recorder: fakeEventRecorder{},
 		},
 	})
 	require.ErrorIs(t, err, addErr)
@@ -130,7 +131,7 @@ func TestDefaultSetupCombinedController(t *testing.T) {
 	mgr := &setupWithManagerTestManager{
 		setupTestManager: setupTestManager{
 			client:   fake.NewClientBuilder().Build(),
-			recorder: record.NewFakeRecorder(1),
+			recorder: fakeEventRecorder{},
 		},
 	}
 	combinedControllerSetupWithManager = func(gotCtx context.Context, gotCombined *issuercontrollers.CombinedController, gotManager ctrl.Manager) error {
@@ -189,7 +190,7 @@ type setupTestManager struct {
 	client   client.Client
 	addErr   error
 	added    []ctrlmanager.Runnable
-	recorder record.EventRecorder
+	recorder events.EventRecorder
 }
 
 func (m *setupTestManager) GetClient() client.Client {
@@ -204,7 +205,7 @@ func (m *setupTestManager) Add(runnable ctrlmanager.Runnable) error {
 	return nil
 }
 
-func (m *setupTestManager) GetEventRecorderFor(string) record.EventRecorder {
+func (m *setupTestManager) GetEventRecorder(string) events.EventRecorder {
 	return m.recorder
 }
 
@@ -221,6 +222,17 @@ func (m *setupWithManagerTestManager) Add(runnable ctrlmanager.Runnable) error {
 	return m.setupTestManager.Add(runnable)
 }
 
-func (m *setupWithManagerTestManager) GetEventRecorderFor(name string) record.EventRecorder {
-	return m.setupTestManager.GetEventRecorderFor(name)
+func (m *setupWithManagerTestManager) GetEventRecorder(name string) events.EventRecorder {
+	return m.setupTestManager.GetEventRecorder(name)
+}
+
+type fakeEventRecorder struct{}
+
+func (fakeEventRecorder) Eventf(runtime.Object, runtime.Object, string, string, string, string, ...interface{}) {
+}
+
+func requireSetCAOnCertificateRequest(t *testing.T, combined *issuercontrollers.CombinedController) {
+	t.Helper()
+	field := reflect.ValueOf(combined).Elem().FieldByName("SetCAOnCertificateRequest")
+	require.True(t, field.Bool())
 }

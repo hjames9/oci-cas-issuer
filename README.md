@@ -12,7 +12,7 @@ helm install oci-cas-issuer charts/oci-cas-issuer \
   --create-namespace
 ```
 
-Supported cert-manager range: v1.15 and newer. The current module resolves against cert-manager v1.18.x through `issuer-lib`.
+Supported cert-manager range: v1.15 and newer. The current module resolves against cert-manager v1.21.x through `issuer-lib`.
 
 ## Examples
 

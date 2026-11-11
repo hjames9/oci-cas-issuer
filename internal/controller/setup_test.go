@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/recorder"
 
 	casv1alpha1 "github.com/oci-cert-manager/oci-cas-issuer/api/v1alpha1"
 	ociissuer "github.com/oci-cert-manager/oci-cas-issuer/internal/oci"
@@ -190,7 +190,7 @@ type setupTestManager struct {
 	client   client.Client
 	addErr   error
 	added    []ctrlmanager.Runnable
-	recorder events.EventRecorder
+	recorder recorder.EventRecorder
 }
 
 func (m *setupTestManager) GetClient() client.Client {
@@ -205,7 +205,7 @@ func (m *setupTestManager) Add(runnable ctrlmanager.Runnable) error {
 	return nil
 }
 
-func (m *setupTestManager) GetEventRecorder(string) events.EventRecorder {
+func (m *setupTestManager) GetEventRecorder(string) recorder.EventRecorder {
 	return m.recorder
 }
 
@@ -222,13 +222,16 @@ func (m *setupWithManagerTestManager) Add(runnable ctrlmanager.Runnable) error {
 	return m.setupTestManager.Add(runnable)
 }
 
-func (m *setupWithManagerTestManager) GetEventRecorder(name string) events.EventRecorder {
+func (m *setupWithManagerTestManager) GetEventRecorder(name string) recorder.EventRecorder {
 	return m.setupTestManager.GetEventRecorder(name)
 }
 
 type fakeEventRecorder struct{}
 
 func (fakeEventRecorder) Eventf(runtime.Object, runtime.Object, string, string, string, string, ...interface{}) {
+}
+
+func (fakeEventRecorder) AnnotatedEventf(runtime.Object, runtime.Object, map[string]string, string, string, string, string, ...interface{}) {
 }
 
 func requireSetCAOnCertificateRequest(t *testing.T, combined *issuercontrollers.CombinedController) {

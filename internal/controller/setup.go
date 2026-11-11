@@ -46,7 +46,6 @@ var combinedControllerSetupWithManager = func(ctx context.Context, combined *iss
 type setupManager interface {
 	GetClient() client.Client
 	Add(ctrlmanager.Runnable) error
-	GetEventRecorder(name string) events.EventRecorder
 }
 
 func (i Issuer) prepareManager(mgr setupManager) (Issuer, error) {

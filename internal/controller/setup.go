@@ -80,7 +80,7 @@ func (i Issuer) combinedController(eventRecorder events.EventRecorder) *issuerco
 		MaxRetryDuration:          10 * time.Minute,
 		Sign:                      i.Sign,
 		Check:                     i.Check,
-		EventRecorder:             eventRecorder,
+		EventRecorder:             boundedEventRecorder{EventRecorder: eventRecorder},
 		SetCAOnCertificateRequest: true,
 	}
 }

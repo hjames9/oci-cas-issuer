@@ -33,7 +33,7 @@ func TestCombinedControllerOptions(t *testing.T) {
 	require.Equal(t, FieldOwner, controller.FieldOwner)
 	require.Equal(t, 10*time.Minute, controller.MaxRetryDuration)
 	requireSetCAOnCertificateRequest(t, controller)
-	require.Same(t, recorder, controller.EventRecorder)
+	require.Same(t, recorder, controller.EventRecorder.(boundedEventRecorder).EventRecorder)
 	require.Len(t, controller.IssuerTypes, 1)
 	require.IsType(t, &casv1alpha1.OCIIssuer{}, controller.IssuerTypes[0])
 	require.Len(t, controller.ClusterIssuerTypes, 1)

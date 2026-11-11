@@ -66,7 +66,8 @@ func (i Issuer) issuerDetails(obj issuerapi.Issuer) (casv1alpha1.IssuerSpec, str
 	}
 }
 
-func (i Issuer) Check(ctx context.Context, issuerObject issuerapi.Issuer) error {
+func (i Issuer) Check(ctx context.Context, issuerObject issuerapi.Issuer) (checkErr error) {
+	defer func() { checkErr = reportControllerError(ctx, checkErr, "OCI issuer check failed") }()
 	spec, namespace, err := i.issuerDetails(issuerObject)
 	if err != nil {
 		return err
@@ -87,7 +88,8 @@ func (i Issuer) Check(ctx context.Context, issuerObject issuerapi.Issuer) error 
 	return nil
 }
 
-func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, issuerObject issuerapi.Issuer) (signer.PEMBundle, error) {
+func (i Issuer) Sign(ctx context.Context, cr signer.CertificateRequestObject, issuerObject issuerapi.Issuer) (bundleResult signer.PEMBundle, signErr error) {
+	defer func() { signErr = reportControllerError(ctx, signErr, "OCI certificate signing failed") }()
 	spec, namespace, err := i.issuerDetails(issuerObject)
 	if err != nil {
 		return signer.PEMBundle{}, signer.IssuerError{Err: err}

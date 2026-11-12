@@ -173,6 +173,7 @@ func TestRunUsesOptionsAndStartsManager(t *testing.T) {
 			require.Equal(t, ":9090", options.Metrics.BindAddress)
 			require.Equal(t, ":9091", options.HealthProbeBindAddress)
 			require.True(t, options.LeaderElection)
+			require.True(t, options.LeaderElectionReleaseOnCancel)
 			require.Equal(t, "oci-cas-issuer.cert-manager.io", options.LeaderElectionID)
 			require.Empty(t, options.LeaderElectionNamespace)
 			require.Equal(t, 90*time.Second, *options.LeaseDuration)

@@ -5,7 +5,7 @@ bin/
 coverage.out
 
 # Build artifacts
-manager
+/manager
 dist/
 build/
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -31,18 +32,31 @@ func TestDeployment(t *testing.T) {
 		"--leader-elect-renew-deadline=40s",
 		"--leader-elect-retry-period=15s",
 	}
+	defaultLiveness := &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("health")}}}
+	defaultReadiness := &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromString("health")}}}
 	for _, tc := range []struct {
-		name     string
-		values   string
-		flags    []string
-		strategy appsv1.DeploymentStrategy
-		imageTag string
+		name        string
+		values      string
+		flags       []string
+		strategy    appsv1.DeploymentStrategy
+		imageTag    string
+		liveness    *corev1.Probe
+		readiness   *corev1.Probe
+		gracePeriod int64
 	}{
 		{name: "default object", flags: defaultFlags},
 		{name: "explicit image tag", values: "image:\n  tag: custom-controller\n", flags: defaultFlags, imageTag: "custom-controller"},
 		{name: "legacy true", values: "leaderElection: true\n", flags: defaultFlags},
 		{name: "legacy false", values: "leaderElection: false\n"},
 		{name: "disabled object", values: "leaderElection:\n  enabled: false\n"},
+		{name: "custom termination grace", values: "terminationGracePeriodSeconds: 120\n", flags: defaultFlags, gracePeriod: 120},
+		{
+			name:      "custom probes",
+			values:    "livenessProbe:\n  timeoutSeconds: 5\n  periodSeconds: 20\n  failureThreshold: 6\n  initialDelaySeconds: 10\nreadinessProbe:\n  timeoutSeconds: 3\n  periodSeconds: 12\n  failureThreshold: 5\n  successThreshold: 2\n",
+			flags:     defaultFlags,
+			liveness:  &corev1.Probe{ProbeHandler: defaultLiveness.ProbeHandler, TimeoutSeconds: 5, PeriodSeconds: 20, FailureThreshold: 6, InitialDelaySeconds: 10},
+			readiness: &corev1.Probe{ProbeHandler: defaultReadiness.ProbeHandler, TimeoutSeconds: 3, PeriodSeconds: 12, FailureThreshold: 5, SuccessThreshold: 2},
+		},
 		{
 			name:   "custom timings",
 			values: "leaderElection:\n  enabled: true\n  leaseDuration: 90s\n  renewDeadline: 60s\n  retryPeriod: 20s\n",
@@ -87,6 +101,27 @@ func TestDeployment(t *testing.T) {
 			}
 			require.Equal(t, "ghcr.io/hjames9/oci-cas-issuer:"+tag, deployment.Spec.Template.Spec.Containers[0].Image)
 			require.Equal(t, tc.strategy, deployment.Spec.Strategy)
+			container := deployment.Spec.Template.Spec.Containers[0]
+			liveness, readiness := tc.liveness, tc.readiness
+			if liveness == nil {
+				liveness = defaultLiveness
+			}
+			if readiness == nil {
+				readiness = defaultReadiness
+			}
+			require.Equal(t, liveness, container.LivenessProbe)
+			require.Equal(t, readiness, container.ReadinessProbe)
+			gracePeriod := tc.gracePeriod
+			if gracePeriod == 0 {
+				gracePeriod = 75
+			}
+			require.NotNil(t, deployment.Spec.Template.Spec.TerminationGracePeriodSeconds)
+			require.Equal(t, gracePeriod, *deployment.Spec.Template.Spec.TerminationGracePeriodSeconds)
+			require.True(t, *container.SecurityContext.ReadOnlyRootFilesystem)
+			require.False(t, *container.SecurityContext.AllowPrivilegeEscalation)
+			require.Equal(t, []corev1.Capability{"ALL"}, container.SecurityContext.Capabilities.Drop)
+			require.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, deployment.Spec.Template.Spec.SecurityContext.SeccompProfile.Type)
+			require.Nil(t, container.SecurityContext.SeccompProfile)
 			var flags []string
 			for _, arg := range deployment.Spec.Template.Spec.Containers[0].Args {
 				if strings.HasPrefix(arg, "--leader-elect") {

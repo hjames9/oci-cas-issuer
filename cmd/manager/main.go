@@ -162,14 +162,15 @@ func run(opts options, runtime runtimeDependencies) error {
 	}
 
 	mgr, err := runtime.newManager(ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: opts.metricsAddr},
-		HealthProbeBindAddress: opts.probeAddr,
-		LeaderElection:         opts.leaderElect,
-		LeaderElectionID:       "oci-cas-issuer.cert-manager.io",
-		LeaseDuration:          &opts.leaderElectLeaseDuration,
-		RenewDeadline:          &opts.leaderElectRenewDeadline,
-		RetryPeriod:            &opts.leaderElectRetryPeriod,
+		Scheme:                        scheme,
+		Metrics:                       metricsserver.Options{BindAddress: opts.metricsAddr},
+		HealthProbeBindAddress:        opts.probeAddr,
+		LeaderElection:                opts.leaderElect,
+		LeaderElectionID:              "oci-cas-issuer.cert-manager.io",
+		LeaderElectionReleaseOnCancel: true,
+		LeaseDuration:                 &opts.leaderElectLeaseDuration,
+		RenewDeadline:                 &opts.leaderElectRenewDeadline,
+		RetryPeriod:                   &opts.leaderElectRetryPeriod,
 	})
 	if err != nil {
 		return fmt.Errorf("start manager: %w", err)
@@ -190,6 +191,8 @@ func run(opts options, runtime runtimeDependencies) error {
 		return fmt.Errorf("add ready check: %w", err)
 	}
 	setupLog.Info("starting manager")
+	// Lease release is safe only while all OCI work belongs to manager runnables
+	// and main exits immediately after Start returns.
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("run manager: %w", err)
 	}

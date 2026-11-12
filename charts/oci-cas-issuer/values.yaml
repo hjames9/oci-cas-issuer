@@ -27,6 +27,22 @@ leaderElection:
 # Empty uses Kubernetes' default RollingUpdate strategy. If leader election is
 # disabled, use {type: Recreate} to prevent pods from overlapping during rollouts.
 strategy: {}
+# Allow the manager's 30s shutdown budget plus lease release (up to the renew
+# deadline) and 5s margin. Increase this if leaderElection.renewDeadline increases.
+terminationGracePeriodSeconds: 75
+
+# Probe defaults preserve Kubernetes' implicit timing settings (1s timeout,
+# 10s period, failure threshold 3). Set timeoutSeconds, periodSeconds,
+# failureThreshold, initialDelaySeconds, etc. here to override them.
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: health
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: health
+
 # Namespace used to resolve Secret references for OCIClusterIssuer resources.
 # Defaults to the Helm release namespace when empty.
 clusterResourceNamespace: ""
@@ -58,9 +74,16 @@ priorityClassName: ""
 
 podSecurityContext:
   runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
 
+# The controller keeps credentials and certificate data in memory and only reads
+# mounted service-account files. No writable volume is needed for normal use.
+# OCI SDK file logging or file-backed retry state require a writable volume
+# if explicitly enabled through extraEnv; leave the SDK's in-memory defaults.
 securityContext:
   allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
   capabilities:
     drop:
       - ALL

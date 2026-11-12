@@ -14,7 +14,7 @@ GOLANGCI_LINT_VERSION ?= v1.64.8
 GEN_GOCACHE ?= /tmp/oci-cas-issuer-controller-gen-cache
 LINT_GOCACHE ?= /tmp/oci-cas-issuer-lint-go-cache
 
-.PHONY: help build test coverage lint install-golangci-lint install-controller-gen manifests generate docker-build docker-push helm-lint helm-package helm-push require-release-version release-prepare release-check release-commit release-tag release-watch release
+.PHONY: help build test coverage lint install-golangci-lint install-controller-gen manifests generate docker-build docker-push helm-lint helm-test helm-package helm-push require-release-version release-prepare release-check release-commit release-tag release-watch release
 
 help: ## Show available Make targets.
 	@awk 'BEGIN {FS = ":.*##"; printf "Available targets:\n"} /^[a-zA-Z0-9_.%$$()\/-]+:.*##/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -56,6 +56,10 @@ docker-push: ## Build and push the multi-arch controller image.
 helm-lint: ## Lint the Helm chart.
 	helm lint $(CHART)
 
+helm-test: ## Test rendered Helm chart values and legacy compatibility (requires Helm).
+	helm version --short
+	go test ./$(CHART)/tests
+
 helm-package: ## Package the Helm chart into dist/charts.
 	mkdir -p $(CHART_PACKAGE_DIR)
 	helm package $(CHART) --destination $(CHART_PACKAGE_DIR) --version $(CHART_VERSION) --app-version $(CHART_VERSION)
@@ -73,7 +77,6 @@ release-prepare: require-release-version ## Update version files for a release.
 	printf '%s\n' "$(VERSION)" > VERSION
 	sed -i 's/^version: .*/version: $(VERSION)/' $(CHART)/Chart.yaml
 	sed -i 's/^appVersion: .*/appVersion: $(VERSION)/' $(CHART)/Chart.yaml
-	sed -i 's/^  tag: .*/  tag: $(VERSION)-controller/' $(CHART)/values.yaml
 
 release-check: require-release-version ## Run release validation checks.
 	$(MAKE) test helm-lint helm-package VERSION=$(VERSION) CHART_VERSION=$(VERSION)

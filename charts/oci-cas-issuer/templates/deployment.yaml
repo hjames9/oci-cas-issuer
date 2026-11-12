@@ -1,3 +1,9 @@
+{{- $leaderElection := dict "enabled" true "leaseDuration" "60s" "renewDeadline" "40s" "retryPeriod" "15s" -}}
+{{- if kindIs "bool" .Values.leaderElection -}}
+{{- $_ := set $leaderElection "enabled" .Values.leaderElection -}}
+{{- else -}}
+{{- $leaderElection = mergeOverwrite $leaderElection (default dict .Values.leaderElection) -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +13,10 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "oci-cas-issuer.name" . }}
@@ -36,11 +46,14 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: manager
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default (printf "%s-controller" .Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            {{- if .Values.leaderElection }}
+            {{- if $leaderElection.enabled }}
             - --leader-elect
+            - --leader-elect-lease-duration={{ $leaderElection.leaseDuration }}
+            - --leader-elect-renew-deadline={{ $leaderElection.renewDeadline }}
+            - --leader-elect-retry-period={{ $leaderElection.retryPeriod }}
             {{- end }}
             - --cluster-resource-namespace={{ default .Release.Namespace .Values.clusterResourceNamespace }}
             - --oci-certificate-delete-after={{ default "48h" .Values.ociCertificateDeleteAfter }}

@@ -2,7 +2,8 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/hjames9/oci-cas-issuer
-  tag: 0.1.24-controller
+  # Defaults to <Chart.appVersion>-controller when empty.
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -13,7 +14,19 @@ serviceAccount:
   # Add OKE Workload Identity annotations here when required by your cluster setup.
   annotations: {}
 
-leaderElection: true
+# Keep enabled for RollingUpdate deployments, where old and new pods overlap.
+# Legacy boolean values are also supported: true uses the default timings below,
+# and false disables leader election and omits all leader-election flags.
+# Timings must be positive, with leaseDuration > renewDeadline > retryPeriod.
+leaderElection:
+  enabled: true
+  leaseDuration: 60s
+  renewDeadline: 40s
+  retryPeriod: 15s
+
+# Empty uses Kubernetes' default RollingUpdate strategy. If leader election is
+# disabled, use {type: Recreate} to prevent pods from overlapping during rollouts.
+strategy: {}
 # Namespace used to resolve Secret references for OCIClusterIssuer resources.
 # Defaults to the Helm release namespace when empty.
 clusterResourceNamespace: ""

@@ -53,6 +53,7 @@ func main() {
 func runMain(args []string, runtime runtimeDependencies) error {
 	options, err := parseOptions(args)
 	if err != nil {
+		ctrl.SetLogger(zap.New())
 		return fmt.Errorf("parse flags: %w", err)
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&options.zapOptions)))
@@ -63,6 +64,9 @@ type options struct {
 	metricsAddr               string
 	probeAddr                 string
 	leaderElect               bool
+	leaderElectLeaseDuration  time.Duration
+	leaderElectRenewDeadline  time.Duration
+	leaderElectRetryPeriod    time.Duration
 	clusterResourceNamespace  string
 	ociCertificateDeleteAfter time.Duration
 	garbageCollectorInterval  time.Duration
@@ -73,6 +77,9 @@ func defaultOptions() options {
 	return options{
 		metricsAddr:               ":8080",
 		probeAddr:                 ":8081",
+		leaderElectLeaseDuration:  60 * time.Second,
+		leaderElectRenewDeadline:  40 * time.Second,
+		leaderElectRetryPeriod:    15 * time.Second,
 		ociCertificateDeleteAfter: controller.DefaultDeleteWait,
 		garbageCollectorInterval:  controller.DefaultGarbageCollectorInterval,
 	}
@@ -86,13 +93,32 @@ func parseOptions(args []string) (options, error) {
 	if err := flags.Parse(args); err != nil {
 		return options{}, err
 	}
+	if err := parsed.validateLeaderElection(); err != nil {
+		return options{}, err
+	}
 	return parsed, nil
+}
+
+func (opts options) validateLeaderElection() error {
+	if opts.leaderElectLeaseDuration <= 0 || opts.leaderElectRenewDeadline <= 0 || opts.leaderElectRetryPeriod <= 0 {
+		return errors.New("--leader-elect-lease-duration, --leader-elect-renew-deadline, and --leader-elect-retry-period must all be positive")
+	}
+	if opts.leaderElectLeaseDuration <= opts.leaderElectRenewDeadline {
+		return errors.New("--leader-elect-lease-duration must be greater than --leader-elect-renew-deadline")
+	}
+	if opts.leaderElectRenewDeadline <= opts.leaderElectRetryPeriod {
+		return errors.New("--leader-elect-renew-deadline must be greater than --leader-elect-retry-period")
+	}
+	return nil
 }
 
 func bindFlags(flags *flag.FlagSet, opts *options) {
 	flags.StringVar(&opts.metricsAddr, "metrics-bind-address", opts.metricsAddr, "The address the metrics endpoint binds to.")
 	flags.StringVar(&opts.probeAddr, "health-probe-bind-address", opts.probeAddr, "The address the probe endpoint binds to.")
 	flags.BoolVar(&opts.leaderElect, "leader-elect", opts.leaderElect, "Enable leader election.")
+	flags.DurationVar(&opts.leaderElectLeaseDuration, "leader-elect-lease-duration", opts.leaderElectLeaseDuration, "Duration before another candidate can acquire an unrenewed leader lease.")
+	flags.DurationVar(&opts.leaderElectRenewDeadline, "leader-elect-renew-deadline", opts.leaderElectRenewDeadline, "Duration the leader retries lease renewal before giving up leadership.")
+	flags.DurationVar(&opts.leaderElectRetryPeriod, "leader-elect-retry-period", opts.leaderElectRetryPeriod, "Interval between leader-election attempts.")
 	flags.StringVar(&opts.clusterResourceNamespace, "cluster-resource-namespace", opts.clusterResourceNamespace, "Namespace for cluster-scoped issuer referenced Secrets.")
 	flags.DurationVar(&opts.ociCertificateDeleteAfter, "oci-certificate-delete-after", opts.ociCertificateDeleteAfter, "Delay before OCI Certificate resources created by this controller are deleted.")
 	flags.DurationVar(&opts.garbageCollectorInterval, "garbage-collector-interval", opts.garbageCollectorInterval, "Interval for scanning issuer compartments and scheduling deletion of tagged OCI Certificate resources. Set to 0 to disable.")
@@ -141,6 +167,9 @@ func run(opts options, runtime runtimeDependencies) error {
 		HealthProbeBindAddress: opts.probeAddr,
 		LeaderElection:         opts.leaderElect,
 		LeaderElectionID:       "oci-cas-issuer.cert-manager.io",
+		LeaseDuration:          &opts.leaderElectLeaseDuration,
+		RenewDeadline:          &opts.leaderElectRenewDeadline,
+		RetryPeriod:            &opts.leaderElectRetryPeriod,
 	})
 	if err != nil {
 		return fmt.Errorf("start manager: %w", err)

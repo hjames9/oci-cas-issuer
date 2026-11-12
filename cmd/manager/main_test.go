@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/oci-cert-manager/oci-cas-issuer/internal/controller"
@@ -23,6 +25,9 @@ func TestParseOptions(t *testing.T) {
 	require.Equal(t, ":8080", opts.metricsAddr)
 	require.Equal(t, ":8081", opts.probeAddr)
 	require.False(t, opts.leaderElect)
+	require.Equal(t, 60*time.Second, opts.leaderElectLeaseDuration)
+	require.Equal(t, 40*time.Second, opts.leaderElectRenewDeadline)
+	require.Equal(t, 15*time.Second, opts.leaderElectRetryPeriod)
 	require.Empty(t, opts.clusterResourceNamespace)
 	require.Equal(t, controller.DefaultDeleteWait, opts.ociCertificateDeleteAfter)
 	require.Equal(t, controller.DefaultGarbageCollectorInterval, opts.garbageCollectorInterval)
@@ -31,6 +36,9 @@ func TestParseOptions(t *testing.T) {
 		"--metrics-bind-address=:9090",
 		"--health-probe-bind-address=:9091",
 		"--leader-elect",
+		"--leader-elect-lease-duration=90s",
+		"--leader-elect-renew-deadline=60s",
+		"--leader-elect-retry-period=20s",
 		"--cluster-resource-namespace=cluster-secrets",
 		"--oci-certificate-delete-after=24h",
 		"--garbage-collector-interval=30m",
@@ -39,12 +47,46 @@ func TestParseOptions(t *testing.T) {
 	require.Equal(t, ":9090", opts.metricsAddr)
 	require.Equal(t, ":9091", opts.probeAddr)
 	require.True(t, opts.leaderElect)
+	require.Equal(t, 90*time.Second, opts.leaderElectLeaseDuration)
+	require.Equal(t, 60*time.Second, opts.leaderElectRenewDeadline)
+	require.Equal(t, 20*time.Second, opts.leaderElectRetryPeriod)
 	require.Equal(t, "cluster-secrets", opts.clusterResourceNamespace)
 	require.Equal(t, 24*time.Hour, opts.ociCertificateDeleteAfter)
 	require.Equal(t, 30*time.Minute, opts.garbageCollectorInterval)
 
 	_, err = parseOptions([]string{"--does-not-exist"})
 	require.Error(t, err)
+}
+
+func TestLeaderElectionFlagValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		flags []string
+		want  string
+	}{
+		{name: "zero lease", flags: []string{"--leader-elect-lease-duration=0s"}, want: "must all be positive"},
+		{name: "negative lease", flags: []string{"--leader-elect-lease-duration=-1s"}, want: "must all be positive"},
+		{name: "zero renew", flags: []string{"--leader-elect-renew-deadline=0s"}, want: "must all be positive"},
+		{name: "negative renew", flags: []string{"--leader-elect-renew-deadline=-1s"}, want: "must all be positive"},
+		{name: "zero retry", flags: []string{"--leader-elect-retry-period=0s"}, want: "must all be positive"},
+		{name: "negative retry", flags: []string{"--leader-elect-retry-period=-1s"}, want: "must all be positive"},
+		{name: "lease equals renew", flags: []string{"--leader-elect-lease-duration=40s"}, want: "--leader-elect-lease-duration must be greater than --leader-elect-renew-deadline"},
+		{name: "lease below renew", flags: []string{"--leader-elect-lease-duration=30s"}, want: "--leader-elect-lease-duration must be greater than --leader-elect-renew-deadline"},
+		{name: "renew equals retry", flags: []string{"--leader-elect-renew-deadline=15s"}, want: "--leader-elect-renew-deadline must be greater than --leader-elect-retry-period"},
+		{name: "renew below retry", flags: []string{"--leader-elect-renew-deadline=10s"}, want: "--leader-elect-renew-deadline must be greater than --leader-elect-retry-period"},
+		{name: "malformed duration", flags: []string{"--leader-elect-retry-period=invalid"}, want: "invalid value"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, enabled := range []string{"true", "false"} {
+				args := append([]string{"--leader-elect=" + enabled}, tc.flags...)
+				_, err := parseOptions(args)
+				require.ErrorContains(t, err, tc.want)
+				// Validation must fail before touching Kubernetes configuration or starting a manager.
+				err = runMain(args, runtimeDependencies{})
+				require.ErrorContains(t, err, tc.want)
+			}
+		})
+	}
 }
 
 func TestRunMain(t *testing.T) {
@@ -101,6 +143,23 @@ func TestMainFunctionInvalidFlag(t *testing.T) {
 	require.Equal(t, 1, *exitCode)
 }
 
+func TestMainFunctionInvalidLeaderElection(t *testing.T) {
+	originalArgs, originalExit, originalSetupLog := os.Args, exitProcess, setupLog
+	t.Cleanup(func() {
+		os.Args, exitProcess, setupLog = originalArgs, originalExit, originalSetupLog
+	})
+	var output bytes.Buffer
+	setupLog = zap.New(zap.WriteTo(&output))
+	os.Args = []string{"oci-cas-issuer", "--leader-elect", "--leader-elect-renew-deadline=60s"}
+	exitCode := 0
+	exitProcess = func(code int) { exitCode = code }
+
+	main()
+
+	require.Equal(t, 1, exitCode)
+	require.Contains(t, output.String(), "--leader-elect-lease-duration must be greater than --leader-elect-renew-deadline")
+}
+
 func TestRunUsesOptionsAndStartsManager(t *testing.T) {
 	ctx := context.Background()
 	manager := &fakeControllerManager{}
@@ -115,6 +174,10 @@ func TestRunUsesOptionsAndStartsManager(t *testing.T) {
 			require.Equal(t, ":9091", options.HealthProbeBindAddress)
 			require.True(t, options.LeaderElection)
 			require.Equal(t, "oci-cas-issuer.cert-manager.io", options.LeaderElectionID)
+			require.Empty(t, options.LeaderElectionNamespace)
+			require.Equal(t, 90*time.Second, *options.LeaseDuration)
+			require.Equal(t, 60*time.Second, *options.RenewDeadline)
+			require.Equal(t, 20*time.Second, *options.RetryPeriod)
 			require.Equal(t, scheme, options.Scheme)
 			return manager, nil
 		},
@@ -132,6 +195,9 @@ func TestRunUsesOptionsAndStartsManager(t *testing.T) {
 		metricsAddr:               ":9090",
 		probeAddr:                 ":9091",
 		leaderElect:               true,
+		leaderElectLeaseDuration:  90 * time.Second,
+		leaderElectRenewDeadline:  60 * time.Second,
+		leaderElectRetryPeriod:    20 * time.Second,
 		clusterResourceNamespace:  "cluster-secrets",
 		ociCertificateDeleteAfter: 24 * time.Hour,
 		garbageCollectorInterval:  30 * time.Minute,
@@ -148,7 +214,10 @@ func TestRunUsesInClusterNamespace(t *testing.T) {
 	err := run(defaultOptions(), runtimeDependencies{
 		namespace: func() (string, error) { return "pod-namespace", nil },
 		context:   context.Background,
-		newManager: func(ctrl.Options) (controllerManager, error) {
+		newManager: func(options ctrl.Options) (controllerManager, error) {
+			require.Equal(t, 60*time.Second, *options.LeaseDuration)
+			require.Equal(t, 40*time.Second, *options.RenewDeadline)
+			require.Equal(t, 15*time.Second, *options.RetryPeriod)
 			return manager, nil
 		},
 		setupIssuer: func(_ context.Context, _ controllerManager, issuer controller.Issuer) error {

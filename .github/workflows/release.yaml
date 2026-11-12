@@ -79,7 +79,6 @@ jobs:
       - name: Package Helm chart
         run: |
           sed -i "s|repository: .*|repository: ${{ steps.meta.outputs.image_repository }}|" charts/oci-cas-issuer/values.yaml
-          sed -i "s|tag: .*|tag: ${{ steps.meta.outputs.image_tag }}|" charts/oci-cas-issuer/values.yaml
           mkdir -p dist/charts
           helm package charts/oci-cas-issuer \
             --destination dist/charts \

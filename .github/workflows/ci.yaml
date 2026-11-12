@@ -25,9 +25,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+      - run: make lint
 
   helm:
     runs-on: ubuntu-latest
